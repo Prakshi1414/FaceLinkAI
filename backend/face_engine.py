@@ -1,30 +1,46 @@
 from deepface import DeepFace
+import numpy as np
 import os
 
 KNOWN_DIR = "data/known_faces"
 
 
+def get_embedding(image_path):
+    embedding = DeepFace.represent(
+        img_path=image_path,
+        model_name="Facenet",
+        enforce_detection=False
+    )[0]["embedding"]
+
+    return np.array(embedding)
+
+
 def recognize_face(image_path):
-    try:
-        # Compare with folder database
-        result = DeepFace.find(
-            img_path=image_path,
-            db_path=KNOWN_DIR,
-            enforce_detection=False,
-            detector_backend="opencv"   # stable + fast
-        )
+    input_emb = get_embedding(image_path)
 
-        # No match found
-        if len(result) == 0 or result[0].empty:
-            return "No match found ❌"
+    best_match = None
+    best_score = 1  # cosine distance
 
-        # Get matched file
-        identity_path = result[0]["identity"].values[0]
+    for file in os.listdir(KNOWN_DIR):
+        file_path = os.path.join(KNOWN_DIR, file)
 
-        # Extract name from filename
-        name = os.path.splitext(os.path.basename(identity_path))[0]
+        try:
+            db_emb = get_embedding(file_path)
 
+            # cosine similarity
+            score = np.dot(input_emb, db_emb) / (
+                np.linalg.norm(input_emb) * np.linalg.norm(db_emb)
+            )
+
+            if score > best_score:
+                best_score = score
+                best_match = file
+
+        except:
+            continue
+
+    if best_match:
+        name = best_match.split(".")[0]
         return f"Matched: {name} ✅"
 
-    except Exception as e:
-        return f"Error: {str(e)}"
+    return "No match found "

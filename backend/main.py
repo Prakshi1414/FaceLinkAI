@@ -2,6 +2,7 @@ from fastapi import FastAPI, UploadFile, File, Form
 import shutil
 import os
 from backend import face_engine
+from backend.clustering_engine import run_clustering
 
 app = FastAPI(title="FaceLinkAI 🚀")
 
@@ -45,3 +46,9 @@ async def recognize_face(file: UploadFile = File(...)):
     result = face_engine.recognize_face(temp_path)
 
     return {"result": result}
+
+# ---------------- CLUSTERING ----------------
+@app.get("/run-clustering")
+def cluster_faces():
+    result = run_clustering()
+    return {"clusters": result}
