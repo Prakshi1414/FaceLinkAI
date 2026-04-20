@@ -20,9 +20,11 @@ def build_embeddings():
 
         try:
             emb = get_embedding(path)
+
             if emb is None:
-             print("Skipping:", file)
-             continue
+              print("Skipping:", file)
+              continue
+
             embeddings.append(emb)
             image_paths.append(file)
         except:
