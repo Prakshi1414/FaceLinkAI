@@ -35,14 +35,17 @@ def build_embeddings():
 
 def run_clustering():
     embeddings, image_paths = build_embeddings()
+    print("TOTAL IMAGES:", len(image_paths))
+    print("TOTAL EMBEDDINGS:", len(embeddings))
+    print("EMBEDDING SHAPE:", embeddings.shape)
 
     if len(embeddings) == 0:
         return "No faces found"
 
     clustering = DBSCAN(
-        eps=0.5,
-        min_samples=2,
-        metric="cosine"
+    eps=0.7,
+    min_samples=1,
+    metric="cosine"
     ).fit(embeddings)
 
     labels = clustering.labels_
@@ -50,6 +53,7 @@ def run_clustering():
     clustered_data = {}
 
     for label, file in zip(labels, image_paths):
+        print(label, file)
         if label == -1:
             continue  # noise skip
 
