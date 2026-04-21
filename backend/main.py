@@ -41,7 +41,7 @@ async def recognize_face(file: UploadFile = File(...)):
     with open(temp_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    result = face_engine.recognize_face(temp_path)
+    result = face_engine.recognize_faces(temp_path)
 
     return {"result": result}
 

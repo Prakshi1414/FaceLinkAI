@@ -63,6 +63,4 @@ def search_face(query_embedding):
             "score": float(scores[0][i])
         })
 
-    print("🔍 SEARCH RESULTS:", results)  # DEBUG
-
     return results

@@ -56,7 +56,11 @@ elif menu == "Recognize Face":
 
             result = response.json()["result"]
 
-            if "Matched" in result:
-                st.success(result)
-            else:
-                st.error(result)
+            for person in result:
+                st.subheader(person["person"])
+
+                for img in person["images"]:
+                    st.image(Image.open(img), width=120)
+
+                if "status" in person:
+                    st.warning("New person added")
