@@ -1,20 +1,44 @@
+import os
+import pickle
 from deepface import DeepFace
 import numpy as np
 
+EMBEDDING_FILE = "data/embeddings.pkl"
+
+
 def get_embedding(image_path):
-    try:
-        print("Embedding for:", image_path)
+    embedding = DeepFace.represent(
+        img_path=image_path,
+        model_name="Facenet",
+         detector_backend="opencv", 
+        enforce_detection=False
+    )[0]["embedding"]
 
-        embedding = DeepFace.represent(
-            img_path=image_path,
-            model_name="Facenet",
-            enforce_detection=False
-        )
+    return np.array(embedding)
 
-        print("RAW OUTPUT:", embedding)
 
-        return np.array(embedding[0]["embedding"])
+def load_db():
+    if not os.path.exists(EMBEDDING_FILE):
+        return []
 
-    except Exception as e:
-        print("EMBEDDING ERROR:", image_path, e)
-        return None
+    with open(EMBEDDING_FILE, "rb") as f:
+        return pickle.load(f)
+
+
+def save_db(data):
+    with open(EMBEDDING_FILE, "wb") as f:
+        pickle.dump(data, f)
+
+
+def add_embedding(name, image_path):
+    db = load_db()
+
+    emb = get_embedding(image_path)
+
+    db.append({
+        "name": name,
+        "image": image_path,
+        "embedding": emb
+    })
+
+    save_db(db)
