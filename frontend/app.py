@@ -56,11 +56,14 @@ elif menu == "Recognize Face":
 
             result = response.json()["result"]
 
+            # Recognize section mein is loop ko use karein
             for person in result:
-                st.subheader(person["person"])
-
-                for img in person["images"]:
-                    st.image(Image.open(img), width=120)
-
-                if "status" in person:
-                    st.warning("New person added")
+                st.subheader(f"👤 {person['person']}")
+                
+                # Photos ko 3 columns mein dikhane ke liye
+                cols = st.columns(3)
+                for idx, img_path in enumerate(person["images"]):
+                    with cols[idx % 3]:
+                        # Agar StaticFiles mount kiya hai toh API_URL use karein
+                        full_url = f"{API_URL}/{img_path}" if not img_path.startswith("http") else img_path
+                        st.image(full_url, use_container_width=True)

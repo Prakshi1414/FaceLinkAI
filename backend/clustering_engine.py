@@ -4,7 +4,7 @@ from sklearn.cluster import DBSCAN
 from backend.embedding_store import get_embedding
 
 
-DATASET_DIR = "data/known_faces"
+DATASET_DIR = "data/images"
 
 
 def build_embeddings():

@@ -9,37 +9,8 @@ import cv2
 
 def recognize_faces(image_path):
     faces = extract_faces(image_path)
-
     final_results = []
-
-    # 🔥 SINGLE FACE → same old flow
-    if len(faces) == 1:
-        emb = get_embedding(image_path)
-        results = search_face(emb)
-
-        filtered = [r for r in results if r["score"] > 0.5]
-
-        if filtered:
-            name = filtered[0]["name"]
-
-            db = load_db()
-            images = [x["image"] for x in db if x["name"] == name]
-
-            return [{
-                "person": name,
-                "images": images
-            }]
-        else:
-           
-            new_name = f"user_{uuid.uuid4().hex[:6]}"
-            add_embedding(new_name, image_path)
-            build_index()
-
-            return [{
-                "person": new_name,
-                "images": [image_path],
-                "status": "new"
-            }]
+    db = load_db() 
 
     # 🔥 MULTI FACE
     for i, face in enumerate(faces):
@@ -64,15 +35,17 @@ def recognize_faces(image_path):
 
         filtered = [r for r in results if r["score"] > 0.7]
 
+        # face_engine.py ke andar recognize_faces function mein:
         if filtered:
             name = filtered[0]["name"]
-
             db = load_db()
-            images = [x["image"] for x in db if x["name"] == name]
+            
+            # Ye line ensure karegi ki person jin-jin photos (single/group) mein hai, sab mil jayein
+            all_linked_images = list(set([x["image"] for x in db if x["name"] == name]))
 
             final_results.append({
                 "person": name,
-                "images": images
+                "images": all_linked_images
             })
 
         else:
@@ -83,7 +56,7 @@ def recognize_faces(image_path):
             final_results.append({
                 "person": new_name,
                 "images": [temp_path],
-                "status": "new"
+                "status": "newly_detected"
             })
 
     return final_results
