@@ -3,6 +3,8 @@ from backend.embedding_store import get_embedding, add_embedding, load_db
 from backend.faiss_index import build_index, search_face
 from deepface import DeepFace
 import numpy as np
+import shutil
+import os
 import uuid
 import cv2
 
@@ -49,16 +51,25 @@ def recognize_faces(image_path):
             })
 
         else:
+            # 1. Naya ID banayein
             new_name = f"user_{uuid.uuid4().hex[:6]}"
-            add_embedding(new_name, temp_path)
-            build_index()   
+            
+            # 2. Permanent path banayein (data/images folder mein)
+            image_name = f"{new_name}.jpg"
+            permanent_path = f"data/images/{image_name}"
+            
+            # 3. Photo ko temp se permanent folder mein COPY karein
+            shutil.copy(temp_path, permanent_path)
+            
+            # 4. DB mein permanent path save karein
+            add_embedding(new_name, permanent_path)
+            build_index()
 
             final_results.append({
                 "person": new_name,
-                "images": [temp_path],
-                "status": "newly_detected"
+                "images": [permanent_path], # Ab ye permanent path response mein jayega
+                "status": "new"
             })
-
     return final_results
 
     

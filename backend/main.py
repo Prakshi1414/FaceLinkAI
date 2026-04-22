@@ -67,8 +67,8 @@ async def register_face(file: UploadFile = File(...), name: str = Form(...)):
         add_embedding(actual_name, file_path, custom_path=temp_crop)
 
     build_index() 
-    return {"message": f"Successfully registered {name} and group members!"}
-    return {"message": f"{name} and all detected faces registered successfully."}
+  
+    return {"message": f"{name} faces registered successfully."}
 
 # ---------------- RECOGNIZE FACE ----------------
 @app.post("/recognize-face")
@@ -80,14 +80,13 @@ async def recognize_face(file: UploadFile = File(...)):
 
     result = face_engine.recognize_faces(temp_path)
     # 🔥 AUTO-CLEAN LOGIC: temp folder ki saari files uda do
-    for filename in os.listdir(UPLOAD_DIR):
+    ''' for filename in os.listdir(UPLOAD_DIR):
         file_path = os.path.join(UPLOAD_DIR, filename)
         try:
             if os.path.isfile(file_path):
                 os.remove(file_path)
         except Exception as e:
-            print(f"Error deleting {file_path}: {e}")
-
+            print(f"Error deleting {file_path}: {e}")'''
     return {"result": result}
     
 
