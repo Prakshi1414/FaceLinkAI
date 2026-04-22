@@ -33,7 +33,7 @@ async def register_face(file: UploadFile = File(...), name: str = Form(...)):
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # 1. Faces extract karo
+    
     faces = face_engine.extract_faces(file_path)
     
     for i, face in enumerate(faces):
@@ -43,24 +43,24 @@ async def register_face(file: UploadFile = File(...), name: str = Form(...)):
         cv2.imwrite(temp_crop, face_img)
         
         # --- SMART CHECK START ---
-        actual_name = name # Default name jo aapne likha hai
+        actual_name = name 
         
         try:
-            # Check karo agar DB khali nahi hai toh hi search karo
+          
             emb = face_engine.get_embedding(temp_crop)
             results = face_engine.search_face(emb)
             
-            # Agar results mile (DB khali nahi hai)
+        
             if results:
                 filtered = [r for r in results if r["score"] > 0.8]
                 if filtered:
                     actual_name = filtered[0]["name"]
                 elif i > 0:
-                    # Agar group mein dusra banda unknown hai
+                  
+                  
                     actual_name = f"user_{uuid.uuid4().hex[:6]}"
         except:
-            # Agar DB khali hai toh search_face error dega, hum yahan handle kar lenge
-            # Pehla user hamesha wahi banega jo aapne 'name' field mein likha hai
+          
             actual_name = name
         # --- SMART CHECK END ---
 
@@ -79,7 +79,7 @@ async def recognize_face(file: UploadFile = File(...)):
         shutil.copyfileobj(file.file, buffer)
 
     result = face_engine.recognize_faces(temp_path)
-    # 🔥 AUTO-CLEAN LOGIC: temp folder ki saari files uda do
+    #  AUTO-CLEAN LOGIC: temp folder
     ''' for filename in os.listdir(UPLOAD_DIR):
         file_path = os.path.join(UPLOAD_DIR, filename)
         try:

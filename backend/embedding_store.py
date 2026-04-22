@@ -30,17 +30,18 @@ def save_db(data):
         pickle.dump(data, f)
 
 
-# embedding_store.py mein changes
+
 def add_embedding(name, image_path, custom_path=None):
     db = load_db()
     
-    # Agar custom_path (cropped face) hai toh uska embedding lo, warna original ka
+   
+   
     target_path = custom_path if custom_path else image_path
     emb = get_embedding(target_path)
 
     db.append({
         "name": name,
-        "image": image_path, # Hamesha original group photo ka path save hoga
+        "image": image_path, 
         "embedding": emb
     })
     save_db(db)

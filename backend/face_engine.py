@@ -37,12 +37,12 @@ def recognize_faces(image_path):
 
         filtered = [r for r in results if r["score"] > 0.7]
 
-        # face_engine.py ke andar recognize_faces function mein:
+        
         if filtered:
             name = filtered[0]["name"]
             db = load_db()
             
-            # Ye line ensure karegi ki person jin-jin photos (single/group) mein hai, sab mil jayein
+           
             all_linked_images = list(set([x["image"] for x in db if x["name"] == name]))
 
             final_results.append({
@@ -51,23 +51,27 @@ def recognize_faces(image_path):
             })
 
         else:
-            # 1. Naya ID banayein
+         
             new_name = f"user_{uuid.uuid4().hex[:6]}"
-            
-            # 2. Permanent path banayein (data/images folder mein)
             image_name = f"{new_name}.jpg"
-            permanent_path = f"data/images/{image_name}"
+
+          
+            save_path = os.path.join("data", "images", image_name)
+
+            try:
+                shutil.copy(temp_path, save_path)
+            except Exception as e:
+                print(f"Error copying file: {e}")
+
+        
+            db_path = f"data/images/{image_name}" 
             
-            # 3. Photo ko temp se permanent folder mein COPY karein
-            shutil.copy(temp_path, permanent_path)
-            
-            # 4. DB mein permanent path save karein
-            add_embedding(new_name, permanent_path)
+            add_embedding(new_name, db_path)
             build_index()
 
             final_results.append({
                 "person": new_name,
-                "images": [permanent_path], # Ab ye permanent path response mein jayega
+                "images": [db_path], 
                 "status": "new"
             })
     return final_results
