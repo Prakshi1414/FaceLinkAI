@@ -3,11 +3,15 @@ import shutil
 import os
 import cv2
 import uuid
+from typing import List, Optional
+from .database_helper import init_db # Database initialization
 from fastapi.staticfiles import StaticFiles
 from backend import face_engine
 from backend.embedding_store import add_embedding
 from backend.faiss_index import build_index
 from backend.clustering_engine import run_clustering
+
+
 
 app = FastAPI(title="FaceLinkAI 🚀")
 
@@ -28,47 +32,52 @@ IMAGE_DIR = "data/images"
 
 # ---------------- REGISTER FACE ----------------
 @app.post("/register-face")
-async def register_face(file: UploadFile = File(...), name: str = Form(...)):
-    file_path = f"{IMAGE_DIR}/{file.filename}"
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+async def register_face(
+    files: List[UploadFile] = File(...), 
+    name: Optional[str] = Form(None)
+):
+    results = []
+    new_embeddings_added = False
+    
+    for file in files:
+        unique_id = uuid.uuid4().hex[:8]
+        file_ext = os.path.splitext(file.filename)[1]
+        file_path = os.path.join(IMAGE_DIR, f"reg_{unique_id}{file_ext}")
 
-    
-    faces = face_engine.extract_faces(file_path)
-    
-    for i, face in enumerate(faces):
+        # 1. File Save
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        # 2. Face extraction
+        faces = face_engine.extract_faces(file_path)
+        if not faces:
+            results.append({"file": file.filename, "status": "No face detected"})
+            continue
+
+        face = faces[0]
         face_img = (face["face"] * 255).astype("uint8")
         face_img = cv2.cvtColor(face_img, cv2.COLOR_RGB2BGR)
-        temp_crop = f"temp/reg_face_{i}.jpg"
+        
+        temp_crop = f"temp/reg_{unique_id}.jpg"
         cv2.imwrite(temp_crop, face_img)
         
-        # --- SMART CHECK START ---
-        actual_name = name 
+        # 3. Embedding
+        emb = face_engine.get_embedding(temp_crop)
+        if emb is not None:
+            final_name = name if name else f"user_{uuid.uuid4().hex[:6]}"
+            add_embedding(final_name, emb, file_path)
+            new_embeddings_added = True
+            results.append({"file": file.filename, "registered_as": final_name})
         
-        try:
-          
-            emb = face_engine.get_embedding(temp_crop)
-            results = face_engine.search_face(emb)
-            
-        
-            if results:
-                filtered = [r for r in results if r["score"] > 0.8]
-                if filtered:
-                    actual_name = filtered[0]["name"]
-                elif i > 0:
-                  
-                  
-                    actual_name = f"user_{uuid.uuid4().hex[:6]}"
-        except:
-          
-            actual_name = name
-        # --- SMART CHECK END ---
+        # Temp file clean karein taaki memory full na ho
+        if os.path.exists(temp_crop):
+            os.remove(temp_crop)
 
-        add_embedding(actual_name, file_path, custom_path=temp_crop)
-
-    build_index() 
-  
-    return {"message": f"{name} faces registered successfully."}
+    # 🔥 CRITICAL: Sab khatam hone ke baad sirf EK baar index banayein
+    if new_embeddings_added:
+        face_engine.build_index() 
+    
+    return {"total_uploaded": len(files), "details": results}
 
 # ---------------- RECOGNIZE FACE ----------------
 @app.post("/recognize-face")
@@ -95,3 +104,5 @@ async def recognize_face(file: UploadFile = File(...)):
 def cluster_faces():
     result = run_clustering()
     return {"clusters": result}
+
+init_db()

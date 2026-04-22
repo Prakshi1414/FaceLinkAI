@@ -13,7 +13,7 @@ def build_index():
     db = load_db()
 
     if len(db) == 0:
-        print("❌ DB empty")
+      
         return
 
     embeddings = []
@@ -47,7 +47,7 @@ def search_face(query_embedding):
 
  
     if index is None:
-        print(" Search skip ho gaya kyunki database abhi khali hai.")
+     
         return []
 
     query = np.array([query_embedding]).astype("float32")

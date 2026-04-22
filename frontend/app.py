@@ -17,10 +17,7 @@ menu = st.sidebar.selectbox("Menu", ["Home", "Register Face", "Recognize Face"])
 if menu == "Home":
     st.subheader("Welcome !")
     st.info("This system uses DeepFace + FastAPI + Folder Database")
-    st.markdown("""
-    - **Register:** Apni photos ko naam ke saath save karein.
-    - **Recognize:** Photo upload karein aur system purane records se match dhoondega.
-    """)
+   
 
 # ---------------- REGISTER ----------------
 elif menu == "Register Face":
