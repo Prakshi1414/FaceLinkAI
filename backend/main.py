@@ -6,7 +6,7 @@ import os, uuid, shutil, cv2
 from .database_helper import init_db # Database initialization
 from fastapi.staticfiles import StaticFiles
 from backend import face_engine
-from backend.embedding_store import load_db
+from backend.embedding_store import load_db, update_name_in_db
 from backend.embedding_store import add_embedding
 from backend.clustering_engine import perform_clustering, auto_merge_clusters
 from backend.faiss_index import build_index
@@ -31,47 +31,28 @@ def home():
 IMAGE_DIR = "data/images"
 
 # ---------------- REGISTER FACE ----------------
+
+# main.py mein register_face ko aise fix karein
 @app.post("/register-face")
 async def register_face(files: List[UploadFile] = File(...), name: Optional[str] = Form(None)):
-    if not os.path.exists("temp"): os.makedirs("temp")
     results = []
-
     for file in files:
+        # 1. Permanent save karein (reg_... naam se)
         unique_id = uuid.uuid4().hex[:8]
         file_path = os.path.join(IMAGE_DIR, f"reg_{unique_id}.jpg")
-        
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        # 1. Pehle check karein kya ye chehra pehle se DB mein hai?
-        # Hum recognition logic ko yahan call karenge
-        existing_matches = face_engine.recognize_faces(file_path)
+        # 2. Sirf recognize karein (auto_save=False taaki hash logic auto-save na kare)
+        matches = face_engine.recognize_faces(file_path, auto_save=False)
         
-        final_name = name # Agar user ne naam diya hai toh wahi use karein
+        for match in matches:
+            final_name = name if name else f"user_{uuid.uuid4().hex[:6]}"
+            # 3. Yahan manually 1 baar add karein
+            add_embedding(final_name, match["embedding"], file_path)
+            results.append({"registered_as": final_name})
 
-        if not final_name: # Agar naam nahi diya gaya
-            if existing_matches and existing_matches[0]["status"] == "existing":
-                # Agar mil gaya, toh purana naam (e.g. user_50fecf) use karein
-                final_name = existing_matches[0]["person"]
-            else:
-                # Agar ekdum naya chehra hai, tabhi naya ID banayein
-                final_name = f"user_{uuid.uuid4().hex[:6]}"
-
-        # 2. Embedding nikal kar DB mein save karein
-        faces = face_engine.extract_faces(file_path)
-        if faces:
-            face_img = (faces[0]["face"] * 255).astype("uint8")
-            temp_crop = f"temp/crop_{unique_id}.jpg"
-            cv2.imwrite(temp_crop, cv2.cvtColor(face_img, cv2.COLOR_RGB2BGR))
-            
-            emb = face_engine.get_embedding(temp_crop)
-            if emb is not None:
-                add_embedding(final_name, emb, file_path)
-                results.append({"file": file.filename, "registered_as": final_name})
-            
-            if os.path.exists(temp_crop): os.remove(temp_crop)
-
-    face_engine.build_index() 
+    build_index()
     return {"status": "complete", "details": results}
 # ---------------- RECOGNIZE FACE ----------------
 @app.post("/recognize-face")
