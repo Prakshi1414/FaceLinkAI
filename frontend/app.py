@@ -111,21 +111,40 @@ elif menu == "View Gallery":
         gallery = data.get("gallery", [])
         
         if not gallery:
-            st.warning("Gallery khali hai. Pehle photos register karein.")
+            st.warning("empty galary. Please register some faces first!")
         else:
             st.write(f"Total Photos in DB: {data['total']}")
             
-            # Search/Filter by Name
-            search_query = st.text_input("Filter by Name", "").lower()
-            filtered_gallery = [item for item in gallery if search_query in item['name'].lower()]
+            # --- SMART VIEW OPTIONS ---
+            view_mode = st.radio("Display Mode", ["Grid View", "Group by Cluster (Smart)"], horizontal=True)
             
-            # Display in Grid
-            cols = st.columns(4) # 4 images per row
-            for idx, item in enumerate(filtered_gallery):
-                with cols[idx % 4]:
-                    full_url = f"{API_URL}/{item['image']}"
-                    st.image(full_url, caption=item['name'], width="stretch")
-                    # Optional: Unique ID ya Path dikhane ke liye
-                    st.caption(f"Path: {item['image'].split('/')[-1]}")
+            if view_mode == "Grid View":
+                search_query = st.text_input("Filter by Name", "").lower()
+                filtered = [item for item in gallery if search_query in item['name'].lower()]
+                
+                cols = st.columns(4)
+                for idx, item in enumerate(filtered):
+                    with cols[idx % 4]:
+                       # Yahan caption=item['name'] rakha hai, path nahi
+                     st.image(f"{API_URL}/{item['image']}", width="stretch")
+            
+            else:
+                # --- CLUSTER GROUPING LOGIC ---
+                st.info("💡 cluster based grouping ")
+                
+                # Sabse pehle unique names ki list banayein
+                unique_names = sorted(list(set([item['name'] for item in gallery])))
+                
+                for person_name in unique_names:
+                    # Har insaan/cluster ke liye ek dropdown (expander)
+                    with st.expander(f"👤 {person_name}"):
+                        person_photos = [img for img in gallery if img['name'] == person_name]
+                        st.write(f"Is group mein total {len(person_photos)} photos hain.")
+                        
+                        inner_cols = st.columns(5)
+                        for i, photo in enumerate(person_photos):
+                            with inner_cols[i % 5]:
+                                st.image(f"{API_URL}/{photo['image']}", width="stretch")
+                                st.caption(photo['image'].split('/')[-1])
     else:
-        st.error("Gallery load nahi ho payi.")
+        st.error("error fetching gallery data.")
