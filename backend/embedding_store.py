@@ -87,3 +87,12 @@ def get_embedding_from_db(name):
         return np.array(json.loads(row[0]))
     return None
 
+def update_name_in_db(image_path, new_name):
+    conn = sqlite3.connect("facelink.db") # Apne DB ka naam confirm kar lein
+    cursor = conn.cursor()
+    cursor.execute("UPDATE embeddings SET name = ? WHERE image = ?", (new_name, image_path))
+    conn.commit()
+    conn.close()
+
+
+
