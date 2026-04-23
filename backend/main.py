@@ -37,20 +37,33 @@ IMAGE_DIR = "data/images"
 async def register_face(files: List[UploadFile] = File(...), name: Optional[str] = Form(None)):
     results = []
     for file in files:
-        # 1. Permanent save karein (reg_... naam se)
-        unique_id = uuid.uuid4().hex[:8]
-        file_path = os.path.join(IMAGE_DIR, f"reg_{unique_id}.jpg")
-        with open(file_path, "wb") as buffer:
+        # Step A: Temporary save
+        temp_path = os.path.join(UPLOAD_DIR, file.filename)
+        with open(temp_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
+        
+        # Step B: Image ka Hash sirf filename ke liye
+        # Isse ye hoga ki 5 baar upload karne par folder mein 1 hi photo rahegi (Space bachegi)
+        file_hash = face_engine.get_image_hash(temp_path)
+        file_ext = os.path.splitext(file.filename)[1]
+        permanent_path = os.path.join(IMAGE_DIR, f"{file_hash}{file_ext}")
 
-        # 2. Sirf recognize karein (auto_save=False taaki hash logic auto-save na kare)
-        matches = face_engine.recognize_faces(file_path, auto_save=False)
+        if not os.path.exists(permanent_path):
+            shutil.move(temp_path, permanent_path)
+        else:
+            os.remove(temp_path)
+
+        # Step C: Recognize faces
+        matches = face_engine.recognize_faces(permanent_path, auto_save=False)
         
         for match in matches:
-            final_name = name if name else f"user_{uuid.uuid4().hex[:6]}"
-            # 3. Yahan manually 1 baar add karein
-            add_embedding(final_name, match["embedding"], file_path)
-            results.append({"registered_as": final_name})
+            final_name = name if name else match.get("person", f"user_{uuid.uuid4().hex[:6]}")
+            
+            # --- CHANGE HERE ---
+            # Hum is_duplicate check nahi karenge. 
+            # Har upload par add_embedding call hoga.
+            add_embedding(final_name, match["embedding"], permanent_path)
+            results.append({"registered_as": final_name, "status": "added"})
 
     build_index()
     return {"status": "complete", "details": results}

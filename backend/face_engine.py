@@ -21,7 +21,21 @@ def recognize_faces(image_path, auto_save=True):
     file_ext = os.path.splitext(image_path)[1]
     permanent_name = f"{file_hash}{file_ext}"
     permanent_path = os.path.join("data/images", permanent_name)
+    existing_file_entry = next((x for x in db_records if x["image"] == permanent_path), None)
     
+    if existing_file_entry:
+        # Agar file mil gayi, toh aage mat badho, purana data return kar do
+        name = existing_file_entry["name"]
+        emb_data = existing_file_entry["embedding"]
+        serializable_emb = emb_data.tolist() if hasattr(emb_data, 'tolist') else emb_data
+        all_photos = list(([x["image"] for x in db_records if x["name"] == name]))
+        return [{
+            "person": name, 
+            "images": all_photos, 
+            "status": "existing",
+           "embedding": serializable_emb,
+            "already_known": True # Flag for logic
+        }]
     if not os.path.exists(permanent_path):
         shutil.copy(image_path, permanent_path)
     
@@ -61,7 +75,7 @@ def recognize_faces(image_path, auto_save=True):
                 "person": name, 
                 "images": all_photos, 
                 "status": "existing",
-                "embedding": emb 
+                "embedding": emb.tolist() if hasattr(emb, 'tolist') else emb
             })
             
         else:
@@ -75,7 +89,7 @@ def recognize_faces(image_path, auto_save=True):
                 "person": new_name, 
                 "images": [permanent_path], 
                 "status": "new",
-                "embedding": emb # FIX: KeyError se bachega
+                "embedding": emb.tolist() if hasattr(emb, 'tolist') else emb     # FIX: KeyError se bachega
             })
 
     if new_face_added:
