@@ -16,7 +16,7 @@ def perform_clustering():
 
     # 3. DBSCAN Algorithm (eps: kitni doori par group banana hai, min_samples: kam se kam kitni photos)
     # eps 0.35 se 0.45 ke beech best kaam karta hai Face recognition ke liye
-    clustering_model = DBSCAN(eps=0.4, min_samples=2, metric="cosine")
+    clustering_model = DBSCAN(eps=0.35, min_samples=2, metric="cosine")
     labels = clustering_model.fit_predict(embeddings)
 
     # 4. Results ko organize karein

@@ -21,8 +21,10 @@ def recognize_faces(image_path, auto_save=True):
     file_ext = os.path.splitext(image_path)[1]
     permanent_name = f"{file_hash}{file_ext}"
     permanent_path = os.path.join("data/images", permanent_name)
-    existing_file_entry = next((x for x in db_records if x["image"] == permanent_path), None)
     
+    '''
+         existing_file_entry = next((x for x in db_records if x["image"] == permanent_path), None)
+
     if existing_file_entry:
         # Agar file mil gayi, toh aage mat badho, purana data return kar do
         name = existing_file_entry["name"]
@@ -35,7 +37,7 @@ def recognize_faces(image_path, auto_save=True):
             "status": "existing",
            "embedding": serializable_emb,
             "already_known": True # Flag for logic
-        }]
+        }]'''
     if not os.path.exists(permanent_path):
         shutil.copy(image_path, permanent_path)
     
