@@ -56,8 +56,7 @@ async def register_face(
             shutil.copyfileobj(file.file, buf)
         temp_paths.append(temp_path)
  
-    # FIX 3: pass name only when single file OR caller explicitly named everyone
-    # For multi-file uploads with a name, treat name as a hint for single-person images.
+   
     results = face_engine.register_bulk(temp_paths, name=name if name else None)
  
     # Cleanup temp files

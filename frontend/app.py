@@ -32,7 +32,7 @@ if menu == "🏠 Home":
             r = requests.get(f"{API_URL}/stats")
             if r.status_code == 200:
                 s = r.json()
-                st.metric("Total Embeddings", s["total_embeddings"])
+                st.metric("total embeddings", s["total_embeddings"])
                 st.metric("Unique Persons",   s["total_persons"])
                 st.json(s["persons"])
             else:
@@ -118,7 +118,7 @@ elif menu == "🔍 Recognize Face":
                             cols = st.columns(min(4, len(imgs)))
                             for i, img_path in enumerate(imgs[:8]):   # max 8 shown
                                 with cols[i % 4]:
-                                    st.image(f"{API_URL}/{img_path}", use_column_width=True)
+                                    st.image(f"{API_URL}/{img_path}", width="stretch")
                         else:
                             st.info("No linked photos yet.")
                         st.divider()
@@ -164,7 +164,7 @@ elif menu == "🖼️ Gallery":
         cols = st.columns(4)
         for i, item in enumerate(items):
             with cols[i % 4]:
-                st.image(f"{API_URL}/{item['image']}",  )
+                st.image(f"{API_URL}/{item['image']}", width="stretch")
                 st.caption(item["name"])   # FIX 1
  
     else:
