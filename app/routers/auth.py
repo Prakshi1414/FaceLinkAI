@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
-from app.models.models import RegisterUser
+from app.models.models import User
 from app.schemas.schemas import (
     LoginRequest,
     RegisterUserRequest,
@@ -45,22 +45,23 @@ def register_user(
     db: Session = Depends(get_db),
 ):
     # Check uniqueness
-    if db.query(RegisterUser).filter(RegisterUser.mobile_number == payload.mobile_number).first():
+    if db.query(User).filter(User.mobile_number == payload.mobile_number).first():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Mobile number already registered.",
         )
     if payload.email:
-        if db.query(RegisterUser).filter(RegisterUser.email == payload.email).first():
+        if db.query(User).filter(User.email == payload.email).first():
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Email already registered.",
             )
 
-    user = RegisterUser(
+    user = User(
         studio_name=payload.studio_name,
         mobile_number=payload.mobile_number,
         email=payload.email,
+        username=payload.username,
         password_hash=hash_password(payload.password),
     )
     db.add(user)
@@ -83,9 +84,9 @@ def login_user(
     db: Session = Depends(get_db),
 ):
     user = (
-        db.query(RegisterUser)
-        .filter(RegisterUser.mobile_number == payload.mobile_number)
-        .first()
+    db.query(User)
+    .filter(User.mobile_number == payload.mobile_number)
+    .first()
     )
     if not user or not verify_password(payload.password, user.password_hash):
         raise HTTPException(
@@ -99,4 +100,6 @@ def login_user(
         token_type="bearer",
         studio_name=user.studio_name,
         user_id=user.id,
+        username=user.username
+
     )

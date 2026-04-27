@@ -21,11 +21,8 @@ from fastapi.staticfiles import StaticFiles
 from app.config import settings
 from app.db.database import engine
 from app.db.init_db import init_db
-from app.ml.startup import bootstrap_faiss_from_db
 from app.routers import albums, auth, gallery, photos, recognition
 
-
-from app.ml.face_engine import faiss_index
 
 logging.basicConfig(
     level=logging.DEBUG if settings.APP_ENV == "development" else logging.INFO,
@@ -51,7 +48,7 @@ async def lifespan(app: FastAPI):
     # Bootstrap FAISS index from existing DB embeddings
     # (This is non-blocking for startup; heavy model loading is lazy)
     try:
-        bootstrap_faiss_from_db()
+       bootstrap_faiss_from_db()
     except Exception as exc:
         logger.warning("FAISS bootstrap skipped (DB may be empty): %s", exc)
 
@@ -82,9 +79,7 @@ def home():
         "message": "FaceLinkAI API is running successfully 🚀",
         "status": "active"
     }
-@app.on_event("startup")
-def startup_event():
-    bootstrap_faiss_from_db()
+
 # ─────────────────────────────────────────────────────────────────────────────
 # CORS  (tighten allowed_origins in production)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -128,7 +123,6 @@ def health():
         "environment": settings.APP_ENV,
         "faiss_persons_indexed": faiss_index.total_persons,
     }
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Allow `python app/main.py` for quick local testing

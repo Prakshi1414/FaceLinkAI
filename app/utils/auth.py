@@ -10,14 +10,14 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db.database import get_db
-from app.models.models import RegisterUser
+from app.models.models import User
 
 # ── Password hashing ──────────────────────────────────────────────────────────
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
@@ -31,7 +31,7 @@ def verify_password(plain, hashed):
 
 
 # ── JWT ───────────────────────────────────────────────────────────────────────
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login-user")
+oauth2_scheme = HTTPBearer()
 
 
 def create_access_token(subject: str, expires_delta: Optional[timedelta] = None) -> str:
@@ -62,16 +62,16 @@ def _decode_token(token: str) -> str:
     
 # ── FastAPI dependency ────────────────────────────────────────────────────────
 def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    token: HTTPAuthorizationCredentials = Depends(oauth2_scheme),
     db: Session = Depends(get_db),
-) -> RegisterUser:
-    user_id_str = _decode_token(token)
+) -> User:
+    user_id_str = _decode_token(token.credentials)
     try:
         user_uuid = uuid.UUID(user_id_str)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token subject") from exc
 
-    user = db.query(RegisterUser).filter(RegisterUser.id == user_uuid).first()
+    user = db.query(User).filter(User.id == user_uuid).first()
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
     return user

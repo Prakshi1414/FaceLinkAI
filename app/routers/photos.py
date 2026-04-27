@@ -34,9 +34,8 @@ from __future__ import annotations
 import logging
 import shutil
 import uuid as _uuid
-from contextlib import contextmanager
 from pathlib import Path
-from typing import Generator, List, Optional, Tuple
+from typing import  List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from PIL import Image, UnidentifiedImageError
@@ -45,7 +44,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.db.database import get_db
 from app.ml.face_engine import embedding_to_bytes, process_image_for_clustering
-from app.models.models import Album, Photo, RegisterUser
+from app.models.models import Album, Photo, User
 from app.schemas.schemas import UploadPhotosResponse, UploadResult
 from app.utils.auth import get_current_user
 
@@ -203,7 +202,7 @@ def _run_ai_pipeline(
     )
 
     if person_id is None:
-        return None, None, "no_face", "No face detected in image"
+     return None, None, "no_face", "No face detected in image"
 
     return (
         person_id,
@@ -232,7 +231,7 @@ async def upload_album_photos(
     album_id: _uuid.UUID = Form(..., description="Target album UUID"),
     files: List[UploadFile] = File(..., description="One or more image files"),
     db: Session = Depends(get_db),
-    current_user: RegisterUser = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> UploadPhotosResponse:
 
     # ── Guard: album must belong to this studio ───────────────────────────────
@@ -240,7 +239,7 @@ async def upload_album_photos(
         db.query(Album)
         .filter(
             Album.id == album_id,
-            Album.register_user_id == current_user.id,
+            Album.user_id == current_user.id
         )
         .first()
     )
@@ -334,13 +333,24 @@ async def upload_album_photos(
                 relative_db = str(Path(studio_id) / album_id_s / tmp.safe_name)
 
                 # ── Persist Photo row ─────────────────────────────────────────
-                photo = Photo(
-                    album_id=album_id,
-                    img_path=relative_db,
-                    person_id=person_id,
-                    embedding=embedding_bytes,
-                    file_size=file_size,
-                )
+                if embedding_bytes is not None:
+                    photo = Photo(
+                        album_id=album_id,
+                        user_id=current_user.id,
+                        img_path=relative_db,
+                        person_id=person_id,
+                        embedding=embedding_bytes,
+                        file_size=file_size,
+                    )
+                else:
+                    photo = Photo(
+                        album_id=album_id,
+                        user_id=current_user.id,
+                        img_path=relative_db,
+                        person_id=None,
+                        embedding=None,
+                        file_size=file_size,
+                    )
                 db.add(photo)
 
                 photos_added += 1

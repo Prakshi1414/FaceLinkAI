@@ -24,7 +24,9 @@ class Settings(BaseSettings):
     # ── AI ────────────────────────────────────────────────────────────────────
     FACE_SIMILARITY_THRESHOLD: float = 0.72
     FAISS_NPROBE: int = 10
-
+  
+    # NEW (optional but useful)
+    # FAISS_INDEX_DIR: str = "./faiss_indexes"
     # ── App ───────────────────────────────────────────────────────────────────
     APP_ENV: str = "development"
     APP_HOST: str = "0.0.0.0"

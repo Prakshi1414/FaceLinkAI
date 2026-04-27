@@ -20,8 +20,8 @@ def _utcnow() -> datetime:
 # ─────────────────────────────────────────────────────────────────────────────
 # 1. register_user  (Studio / tenant account)
 # ─────────────────────────────────────────────────────────────────────────────
-class RegisterUser(Base):
-    __tablename__ = "register_user"
+class User(Base):
+    __tablename__ = "users"
 
     id = Column(
         UUID(as_uuid=True),
@@ -34,17 +34,18 @@ class RegisterUser(Base):
     email          = Column(Text, nullable=True,  unique=True)
     password_hash  = Column(Text, nullable=False)
     created_at     = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
+    username = Column(String, nullable=False)
 
     # ── Relationships ─────────────────────────────────────────────────────────
     albums = relationship(
         "Album",
-        back_populates="studio",
+        back_populates="user",
         cascade="all, delete-orphan",
         lazy="dynamic",
     )
 
     def __repr__(self) -> str:
-        return f"<RegisterUser id={self.id} studio={self.studio_name!r}>"
+        return f"<user id={self.id} studio={self.studio_name!r}>"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -59,14 +60,14 @@ class Album(Base):
         default=uuid.uuid4,
         nullable=False,
     )
-    register_user_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("register_user.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
+    user_id = Column(
+    UUID(as_uuid=True),
+    ForeignKey("users.id", ondelete="CASCADE"),
+    nullable=False,
+    index=True,
+)
+    
     album_name   = Column(Text, nullable=False)
-    event_name   = Column(Text, nullable=True)
     event_date   = Column(Date, nullable=True)
     total_photos = Column(Integer, default=0, nullable=False)
     total_size   = Column(BigInteger, default=0, nullable=False)   # bytes
@@ -75,7 +76,7 @@ class Album(Base):
     created_at   = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
 
     # ── Relationships ─────────────────────────────────────────────────────────
-    studio = relationship("RegisterUser", back_populates="albums")
+    user = relationship("User", back_populates="albums")
     photos = relationship(
         "Photo",
         back_populates="album",

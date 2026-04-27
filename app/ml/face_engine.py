@@ -142,7 +142,12 @@ class FAISSPersonIndex:
 
 
 # Module-level singleton
-faiss_index = FAISSPersonIndex()
+faiss_indexes: Dict[str, FAISSPersonIndex] = {}
+
+def get_faiss_index(user_id: str) -> FAISSPersonIndex:
+    if user_id not in faiss_indexes:
+        faiss_indexes[user_id] = FAISSPersonIndex()
+    return faiss_indexes[user_id]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -150,6 +155,12 @@ faiss_index = FAISSPersonIndex()
 # ─────────────────────────────────────────────────────────────────────────────
 
 def detect_faces(image_path: str) -> List[dict]:
+    """
+    Run RetinaFace detection on an image file.
+
+    Returns a list of face dicts as returned by RetinaFace.detect_faces().
+    Returns empty list when no faces are found or the call fails.
+    """
     try:
         RetinaFace = _get_retinaface()
         faces = RetinaFace.detect_faces(image_path)
@@ -202,6 +213,7 @@ def bytes_to_embedding(data: bytes) -> np.ndarray:
 
 def process_image_for_clustering(
     image_path: str,
+    user_id: str, 
     threshold: float,
 ) -> Tuple[Optional[str], Optional[np.ndarray], bool]:
     """
@@ -237,7 +249,10 @@ def process_image_for_clustering(
 
     print("Faces found:", len(faces))
     print("Embedding generated:", embedding is not None)
-    # Step 3: Search
+    if embedding is None:
+     return None, None, False
+    
+    faiss_index = get_faiss_index(user_id)
     matched_id, score = faiss_index.search(embedding, threshold)
 
     # Step 4: Assign

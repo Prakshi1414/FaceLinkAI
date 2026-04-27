@@ -1,32 +1,5 @@
 # app/routers/gallery.py
-# ─────────────────────────────────────────────────────────────────────────────
-# GET /gallery
-#
-# Returns all albums for the authenticated studio, with each album's photos
-# grouped by person_id.  Photos with no detected face are placed under a
-# synthetic person_id of "__no_face__".
-#
-# Response shape:
-# {
-#   "studio_id": "...",
-#   "albums": [
-#     {
-#       "album_id": "...",
-#       "album_name": "...",
-#       "event_name": "...",
-#       "persons": [
-#         {
-#           "person_id": "uuid-string",
-#           "total_photos": 12,
-#           "photos": [ { id, album_id, img_path, person_id, ... }, ... ]
-#         },
-#         ...
-#       ]
-#     },
-#     ...
-#   ]
-# }
-# ─────────────────────────────────────────────────────────────────────────────
+
 
 from __future__ import annotations
 
@@ -38,7 +11,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
-from app.models.models import Album, Photo, RegisterUser
+from app.models.models import Album, Photo, User
 from app.schemas.schemas import (
     AlbumGallery,
     GalleryResponse,
@@ -60,12 +33,12 @@ _NO_FACE_SENTINEL = "__no_face__"
 )
 def get_gallery(
     db: Session = Depends(get_db),
-    current_user: RegisterUser = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     # ── 1. Fetch all albums for this studio ───────────────────────────────────
     albums: List[Album] = (
         db.query(Album)
-        .filter(Album.register_user_id == current_user.id)
+        .filter(Album.user_id == current_user.id)
         .order_by(Album.created_at.desc())
         .all()
     )
@@ -114,7 +87,6 @@ def get_gallery(
             AlbumGallery(
                 album_id=album.id,
                 album_name=album.album_name,
-                event_name=album.event_name,
                 persons=person_groups,
             )
         )

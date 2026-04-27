@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import logging
 from typing import List
-
+from app.ml.face_engine import get_faiss_index  
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db.database import get_db
-from app.ml.face_engine import faiss_index, get_embedding_for_query
-from app.models.models import Album, Photo, RegisterUser
+from app.ml.face_engine import get_faiss_index, get_embedding_for_query
+from app.models.models import Album, Photo, User
 from app.schemas.schemas import RecognizeResponse, RecognizedPhoto
 from app.utils.auth import get_current_user
 
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 async def recognize_face(
     file: UploadFile = File(..., description="Query image containing one face"),
     db: Session = Depends(get_db),
-    current_user: RegisterUser = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     # ── 1. Read image bytes and extract embedding ─────────────────────────────
     image_bytes = await file.read()
@@ -40,7 +40,20 @@ async def recognize_face(
         )
 
     # ── 2. FAISS search ───────────────────────────────────────────────────────
-    person_id, similarity_score = faiss_index.search(embedding, threshold=settings.FACE_SIMILARITY_THRESHOLD)
+    user_index = get_faiss_index(str(current_user.id))
+
+    if user_index.total_persons == 0:
+     return RecognizeResponse(
+        person_id=None,
+        is_new_person=True,
+        similarity_score=None,
+        matched_photos=[],
+    )
+
+    person_id, similarity_score = user_index.search(
+        embedding,
+        threshold=settings.FACE_SIMILARITY_THRESHOLD
+    )
 
     is_new_person = person_id is None
     matched_photos: List[RecognizedPhoto] = []
@@ -51,7 +64,7 @@ async def recognize_face(
         studio_album_ids = [
             row[0]
             for row in db.query(Album.id)
-            .filter(Album.register_user_id == current_user.id)
+            .filter(Album.user_id == current_user.id)
             .all()
         ]
 
@@ -79,7 +92,7 @@ async def recognize_face(
 
     logger.info(
         "recognize-face: studio=%s  person_id=%s  score=%.4f  matches=%d",
-        current_user.id, person_id, similarity_score or 0.0, len(matched_photos),
+        current_user.id, person_id, similarity_score if similarity_score is not None else 0.0, len(matched_photos),
     )
     return RecognizeResponse(
         person_id=person_id,

@@ -15,6 +15,7 @@ engine = create_engine(
     pool_pre_ping=True,          # drop stale connections automatically
     pool_size=10,
     max_overflow=20,
+    pool_recycle=1800,
     echo=(settings.APP_ENV == "development"),
 )
 

@@ -3,7 +3,7 @@
 # POST   /create-album
 # GET    /get-albums
 # GET    /album/{id}
-# POST   /album/{album_id}/generate-share-link
+# POST   /album/{album_id}/generate-share-link  
 # POST   /album/{album_id}/toggle-share
 # GET    /album/share/{share_link}          ← PUBLIC (no auth)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
-from app.models.models import Album, Photo, RegisterUser
+from app.models.models import Album, Photo, User
 from app.schemas.schemas import (
     AlbumResponse,
     CreateAlbumRequest,
@@ -37,10 +37,10 @@ logger = logging.getLogger(__name__)
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _get_album_or_404(album_id: _uuid.UUID, user: RegisterUser, db: Session) -> Album:
+def _get_album_or_404(album_id: _uuid.UUID, user: User, db: Session):
     album = (
         db.query(Album)
-        .filter(Album.id == album_id, Album.register_user_id == user.id)
+        .filter(Album.id == album_id, Album.user_id == user.id)
         .first()
     )
     if not album:
@@ -60,15 +60,14 @@ def _get_album_or_404(album_id: _uuid.UUID, user: RegisterUser, db: Session) -> 
 def create_album(
     payload: CreateAlbumRequest,
     db: Session = Depends(get_db),
-    current_user: RegisterUser = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     album = Album(
-        register_user_id=current_user.id,
-        album_name=payload.album_name,
-        event_name=payload.event_name,
-        event_date=payload.event_date,
-        share_link=_uuid.uuid4().hex,   # 32-char hex token
-    )
+    user_id=current_user.id,
+    album_name=payload.album_name,
+    event_date=payload.event_date,
+    share_link=_uuid.uuid4().hex,
+)
     db.add(album)
     db.commit()
     db.refresh(album)
@@ -86,11 +85,11 @@ def create_album(
 )
 def get_albums(
     db: Session = Depends(get_db),
-    current_user: RegisterUser = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     return (
         db.query(Album)
-        .filter(Album.register_user_id == current_user.id)
+       .filter(Album.user_id == current_user.id)
         .order_by(Album.created_at.desc())
         .all()
     )
@@ -107,7 +106,7 @@ def get_albums(
 def get_album(
     album_id: _uuid.UUID,
     db: Session = Depends(get_db),
-    current_user: RegisterUser = Depends(get_current_user),
+   current_user: User = Depends(get_current_user)
 ):
     return _get_album_or_404(album_id, current_user, db)
 
@@ -123,7 +122,7 @@ def get_album(
 def generate_share_link(
     album_id: _uuid.UUID,
     db: Session = Depends(get_db),
-    current_user: RegisterUser = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     album = _get_album_or_404(album_id, current_user, db)
     album.share_link = _uuid.uuid4().hex   # Regenerate token
@@ -148,7 +147,7 @@ def generate_share_link(
 def toggle_share(
     album_id: _uuid.UUID,
     db: Session = Depends(get_db),
-    current_user: RegisterUser = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     album = _get_album_or_404(album_id, current_user, db)
     album.is_active = not album.is_active
@@ -192,13 +191,12 @@ def public_album(
     )
 
     return PublicAlbumResponse(
-        album_id=album.id,
-        album_name=album.album_name,
-        event_name=album.event_name,
-        event_date=album.event_date,
-        total_photos=album.total_photos,
-        photos=[
-            PublicPhotoItem(id=p.id, img_path=p.img_path, person_id=p.person_id)
-            for p in photos
-        ],
-    )
+    album_id=album.id,
+    album_name=album.album_name,
+    event_date=album.event_date,
+    total_photos=album.total_photos,
+    photos=[
+        PublicPhotoItem(id=p.id, img_path=p.img_path, person_id=p.person_id)
+        for p in photos
+    ],
+)

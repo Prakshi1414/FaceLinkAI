@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 def init_db() -> None:
     logger.info("Dropping all existing tables …")
-    Base.metadata.drop_all(bind=engine)
+    #Base.metadata.drop_all(bind=engine)
     logger.info("Creating tables from scratch …")
     Base.metadata.create_all(bind=engine)
     logger.info("Database initialised successfully.")

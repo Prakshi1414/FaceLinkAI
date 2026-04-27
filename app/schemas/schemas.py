@@ -11,6 +11,8 @@ from typing import List, Optional
 
 from pydantic import BaseModel, EmailStr, Field
 
+from app.models.models import User
+
 
 # ═════════════════════════════════════════════════════════════════════════════
 # AUTH
@@ -21,7 +23,7 @@ class RegisterUserRequest(BaseModel):
     mobile_number: str          = Field(..., min_length=7, max_length=20)
     email:         Optional[EmailStr] = None
     password:      str          = Field(..., min_length=6)
-
+    username: str 
 
 class RegisterUserResponse(BaseModel):
     id:            uuid.UUID
@@ -29,7 +31,7 @@ class RegisterUserResponse(BaseModel):
     mobile_number: str
     email:         Optional[str]
     created_at:    datetime
-
+    username: Optional[str]
     model_config = {"from_attributes": True}
 
 
@@ -43,7 +45,7 @@ class TokenResponse(BaseModel):
     token_type:   str = "bearer"
     studio_name:  str
     user_id:      uuid.UUID
-
+    username : str
 
 # ═════════════════════════════════════════════════════════════════════════════
 # ALBUM
@@ -51,20 +53,18 @@ class TokenResponse(BaseModel):
 
 class CreateAlbumRequest(BaseModel):
     album_name:  str            = Field(..., min_length=1, max_length=200)
-    event_name:  Optional[str]  = None
     event_date:  Optional[date] = None
 
 
 class AlbumResponse(BaseModel):
-    id:               uuid.UUID
-    album_name:       str
-    event_name:       Optional[str]
-    event_date:       Optional[date]
-    total_photos:     int
-    total_size:       int
-    share_link:       str
-    is_active:        bool
-    created_at:       datetime
+    id: uuid.UUID
+    album_name: str
+    event_date: Optional[date]
+    total_photos: int
+    total_size: int
+    share_link: str
+    is_active: bool
+    created_at: datetime
 
     model_config = {"from_attributes": True}
 
@@ -99,12 +99,11 @@ class PublicPhotoItem(BaseModel):
 
 
 class PublicAlbumResponse(BaseModel):
-    album_id:     uuid.UUID
-    album_name:   str
-    event_name:   Optional[str]
-    event_date:   Optional[date]
+    album_id: uuid.UUID
+    album_name: str
+    event_date: Optional[date]
     total_photos: int
-    photos:       List[PublicPhotoItem]
+    photos: List[PublicPhotoItem]
 
 
 class UploadResult(BaseModel):
@@ -152,12 +151,11 @@ class PersonGroup(BaseModel):
 class AlbumGallery(BaseModel):
     album_id:    uuid.UUID
     album_name:  str
-    event_name:  Optional[str]
     persons:     List[PersonGroup]
 
 
 class GalleryResponse(BaseModel):
-    studio_id: uuid.UUID
+    user_id: uuid.UUID   
     albums:    List[AlbumGallery]
 
 
