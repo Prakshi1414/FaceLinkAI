@@ -1,20 +1,3 @@
-# app/routers/recognition.py
-# ─────────────────────────────────────────────────────────────────────────────
-# POST /recognize-face
-#
-# Accepts a single query image (selfie / unknown face).
-# Workflow:
-#   1. Extract embedding from query image
-#   2. Search FAISS index for nearest person (respecting similarity threshold)
-#   3. Query DB for all Photos with that person_id that belong to the
-#      current studio's albums (multi-tenant isolation)
-#   4. Return person_id + matched photos with similarity score
-#
-# This endpoint is PROTECTED – the caller must be an authenticated studio user.
-# For a "client-facing" public selfie search, the studio would build a thin
-# public proxy that calls this endpoint using a server-side studio token.
-# ─────────────────────────────────────────────────────────────────────────────
-
 from __future__ import annotations
 
 import logging
@@ -104,3 +87,4 @@ async def recognize_face(
         similarity_score=round(similarity_score, 4) if similarity_score else None,
         matched_photos=matched_photos,
     )
+    

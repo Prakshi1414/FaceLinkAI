@@ -25,7 +25,7 @@ from app.ml.startup import bootstrap_faiss_from_db
 from app.routers import albums, auth, gallery, photos, recognition
 
 
-
+from app.ml.face_engine import faiss_index
 
 logging.basicConfig(
     level=logging.DEBUG if settings.APP_ENV == "development" else logging.INFO,
@@ -68,10 +68,6 @@ async def lifespan(app: FastAPI):
 # ─────────────────────────────────────────────────────────────────────────────
 app = FastAPI(
     title="FaceLinkAI – Studio Edition",
-    description=(
-        "Production-level multi-tenant AI face recognition SaaS for photography studios.\n\n"
-        "**Stack**: FastAPI · PostgreSQL · DeepFace Facenet512 · RetinaFace · FAISS"
-    ),
     version="1.0.0",
     contact={"name": "FaceLinkAI Engineering"},
     lifespan=lifespan,
@@ -94,12 +90,14 @@ def startup_event():
 # ─────────────────────────────────────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if settings.APP_ENV == "development" else [],
+    allow_origins=["*"] if settings.APP_ENV == "development" else [
+        "http://localhost:8501",
+        "http://127.0.0.1:8501"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Static file serving for uploaded images
 # /images/<studio_id>/<album_id>/<filename>

@@ -20,14 +20,13 @@ from app.db.database import get_db
 from app.models.models import RegisterUser
 
 # ── Password hashing ──────────────────────────────────────────────────────────
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 
-def hash_password(plain: str) -> str:
-    return pwd_context.hash(plain)
+def hash_password(password: str):
+    return pwd_context.hash(password)
 
-
-def verify_password(plain: str, hashed: str) -> bool:
+def verify_password(plain, hashed):
     return pwd_context.verify(plain, hashed)
 
 

@@ -150,12 +150,6 @@ faiss_index = FAISSPersonIndex()
 # ─────────────────────────────────────────────────────────────────────────────
 
 def detect_faces(image_path: str) -> List[dict]:
-    """
-    Run RetinaFace detection on an image file.
-
-    Returns a list of face dicts as returned by RetinaFace.detect_faces().
-    Returns empty list when no faces are found or the call fails.
-    """
     try:
         RetinaFace = _get_retinaface()
         faces = RetinaFace.detect_faces(image_path)
@@ -168,13 +162,8 @@ def detect_faces(image_path: str) -> List[dict]:
 
 
 def extract_embedding(image_path: str) -> Optional[np.ndarray]:
-    """
-    Extract a Facenet512 embedding for the first (primary) face in the image.
-
-    Returns
-    -------
-    float32 ndarray of shape (512,) or None if no face is found.
-    """
+    print("\n===== FACE DETECTION STARTED =====")
+    print("Image Path:", image_path)
     try:
         DeepFace = _get_deepface()
         result = DeepFace.represent(
@@ -233,12 +222,21 @@ def process_image_for_clustering(
     if not faces:
         logger.debug("No face detected in %s", image_path)
         return None, None, False
+    face_img = faces[0]["face"] if isinstance(faces[0], dict) and "face" in faces[0] else None
 
-    # Step 2: Embed (primary face only)
-    embedding = extract_embedding(image_path)
-    if embedding is None:
-        return None, None, False
+    if face_img is None:
+        embedding = extract_embedding(image_path)
+    else:
+        import cv2
+        face_img = (face_img * 255).astype("uint8")
+        
+        temp_path = "/tmp/face.jpg"
+        cv2.imwrite(temp_path, face_img)
 
+        embedding = extract_embedding(temp_path)
+
+    print("Faces found:", len(faces))
+    print("Embedding generated:", embedding is not None)
     # Step 3: Search
     matched_id, score = faiss_index.search(embedding, threshold)
 
