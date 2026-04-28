@@ -94,4 +94,4 @@ def get_gallery(
     logger.debug(
         "Gallery fetched for studio %s: %d albums", current_user.id, len(album_galleries)
     )
-    return GalleryResponse(studio_id=current_user.id, albums=album_galleries)
+    return GalleryResponse(user_id=current_user.id, albums=album_galleries)

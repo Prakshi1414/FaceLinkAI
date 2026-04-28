@@ -72,7 +72,6 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-
 @app.get("/")
 def home():
     return {
@@ -95,11 +94,14 @@ app.add_middleware(
 )
 # ─────────────────────────────────────────────────────────────────────────────
 # Static file serving for uploaded images
-# /images/<studio_id>/<album_id>/<filename>
 # ─────────────────────────────────────────────────────────────────────────────
 _image_dir = Path(settings.IMAGE_DIR)
 _image_dir.mkdir(parents=True, exist_ok=True)
+
+# Ye rahi wo missing line:
 app.mount("/images", StaticFiles(directory=str(_image_dir)), name="images")
+
+logger.info("Serving static images from: %s", _image_dir.absolute())
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Routers
@@ -109,7 +111,6 @@ app.include_router(albums.router)
 app.include_router(photos.router)
 app.include_router(recognition.router)
 app.include_router(gallery.router)
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Health check
@@ -127,6 +128,7 @@ def health():
 # ─────────────────────────────────────────────────────────────────────────────
 # Allow `python app/main.py` for quick local testing
 # ─────────────────────────────────────────────────────────────────────────────
+
 if __name__ == "__main__":
     import uvicorn
 

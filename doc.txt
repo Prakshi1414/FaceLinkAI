@@ -36,7 +36,7 @@ MODEL_NAME    = "Facenet512"
 # Confidence threshold for accepting a detected face.
 # 0.70 is safe for studio photos (angled, group shots, etc.).
 # Old broken code used 0.85 which was too aggressive.
-CONFIDENCE_THRESHOLD = 0.60
+CONFIDENCE_THRESHOLD = 0.70
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -1,8 +1,16 @@
+# app/routers/recognition.py  (FIXED)
+# ─────────────────────────────────────────────────────────────────────────────
+# CHANGE: pass str(current_user.id) to get_faiss_index() consistently.
+# The old broken version called get_faiss_index(str(current_user.id)) in one
+# place but imported the global `faiss_index` singleton in health check.
+# Now all lookups go through get_faiss_index(user_id).
+# ─────────────────────────────────────────────────────────────────────────────
+
 from __future__ import annotations
 
 import logging
 from typing import List
-from app.ml.face_engine import get_faiss_index  
+
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
@@ -39,28 +47,28 @@ async def recognize_face(
             detail="No face detected in the uploaded image. Please use a clear frontal face photo.",
         )
 
-    # ── 2. FAISS search ───────────────────────────────────────────────────────
-    user_index = get_faiss_index(str(current_user.id))
+    # ── 2. FAISS search (per-user index) ──────────────────────────────────────
+    user_id    = str(current_user.id)
+    user_index = get_faiss_index(user_id)
 
     if user_index.total_persons == 0:
-     return RecognizeResponse(
-        person_id=None,
-        is_new_person=True,
-        similarity_score=None,
-        matched_photos=[],
-    )
+        return RecognizeResponse(
+            person_id        = None,
+            is_new_person    = True,
+            similarity_score = None,
+            matched_photos   = [],
+        )
 
     person_id, similarity_score = user_index.search(
         embedding,
-        threshold=settings.FACE_SIMILARITY_THRESHOLD
+        threshold=settings.FACE_SIMILARITY_THRESHOLD,
     )
 
-    is_new_person = person_id is None
+    is_new_person  = person_id is None
     matched_photos: List[RecognizedPhoto] = []
 
-    # ── 3. DB lookup – ONLY within this studio's albums (multi-tenant) ────────
+    # ── 3. DB lookup – only within this studio's albums ───────────────────────
     if person_id:
-        # Fetch studio album IDs first
         studio_album_ids = [
             row[0]
             for row in db.query(Album.id)
@@ -81,23 +89,26 @@ async def recognize_face(
             )
             matched_photos = [
                 RecognizedPhoto(
-                    photo_id=photo.id,
-                    img_path=photo.img_path,
-                    album_id=photo.album_id,
-                    album_name=album_name,
-                    similarity=round(similarity_score, 4),
+                    photo_id   = photo.id,
+                    img_path   = photo.img_path,
+                    album_id   = photo.album_id,
+                    album_name = album_name,
+                    similarity = round(similarity_score, 4),
                 )
                 for photo, album_name in rows
             ]
 
     logger.info(
-        "recognize-face: studio=%s  person_id=%s  score=%.4f  matches=%d",
-        current_user.id, person_id, similarity_score if similarity_score is not None else 0.0, len(matched_photos),
+        "recognize-face: studio=%s  person_id=%s  score=%s  matches=%d",
+        current_user.id,
+        person_id,
+        f"{similarity_score:.4f}" if similarity_score is not None else "N/A",
+        len(matched_photos),
     )
+
     return RecognizeResponse(
-        person_id=person_id,
-        is_new_person=is_new_person,
-        similarity_score=round(similarity_score, 4) if similarity_score else None,
-        matched_photos=matched_photos,
+        person_id        = person_id,
+        is_new_person    = is_new_person,
+        similarity_score = round(similarity_score, 4) if similarity_score else None,
+        matched_photos   = matched_photos,
     )
-    

@@ -1,32 +1,28 @@
-# app/routers/photos.py
+# app/routers/photos.py  (FIXED)
 # ─────────────────────────────────────────────────────────────────────────────
-# POST /upload-album-photos
+# CHANGES FROM BROKEN VERSION
+# ────────────────────────────
 #
-# Two-phase file handling per image:
+# FIX 1 – process_image_for_clustering now returns a LIST (multi-face support)
+#   Old broken code called it expecting a single (person_id, emb, is_new) tuple.
+#   Now it returns List[(person_id, emb, is_new)].
+#   The router stores one Photo row per detected face.
+#   For photos with no face detected (empty list), a Photo row is still saved
+#   with person_id=None and embedding=None (so the photo isn't lost).
 #
-#   Phase 1 – TEMP
-#     • Write raw bytes to  TEMP_DIR/<studio_id>/<album_id>/<uuid>.<ext>
-#     • Validate the file can be opened as an image (PIL check)
+# FIX 2 – Removed user_id from Photo() constructor
+#   The Photo model (models.py) has NO user_id column.
+#   The broken version passed user_id= which caused a DB column error.
+#   Ownership is tracked via album_id → album.user_id, not on Photo directly.
 #
-#   Phase 2 – PROCESS
-#     • Run RetinaFace detection on the temp file
-#     • Run DeepFace Facenet512 embedding on the temp file
-#     • FAISS cosine search → assign / create person_id
+# FIX 3 – _run_ai_pipeline updated for new return type
+#   Now returns List of (person_id, embedding_bytes, status, message) per face.
+#   The outer loop creates one Photo row per face result.
 #
-#   On SUCCESS (face found OR no-face-but-valid-image)
-#     • shutil.move() temp file → IMAGE_DIR/<studio_id>/<album_id>/
-#     • Persist Photo row in PostgreSQL
-#     • Update album.total_photos + album.total_size
+# FIX 4 – user_id passed to process_image_for_clustering
+#   The new face engine is per-user FAISS indexed. We must pass user_id so
+#   recognition stays isolated per studio.
 #
-#   On ANY FAILURE (bad file, corrupt image, unhandled exception)
-#     • Delete temp file immediately
-#     • Append error result – do NOT write a DB row
-#     • Continue to next file (never abort the whole batch)
-#
-# Directory layout
-#   data/
-#     temp/    ← landing zone  (never referenced by DB)
-#     images/  ← permanent store  (img_path in DB is relative to here)
 # ─────────────────────────────────────────────────────────────────────────────
 
 from __future__ import annotations
@@ -35,7 +31,7 @@ import logging
 import shutil
 import uuid as _uuid
 from pathlib import Path
-from typing import  List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from PIL import Image, UnidentifiedImageError
@@ -51,55 +47,39 @@ from app.utils.auth import get_current_user
 router = APIRouter(tags=["Photos"])
 logger = logging.getLogger(__name__)
 
-# Permitted image extensions (lower-case)
 _ALLOWED_EXTENSIONS: frozenset[str] = frozenset(
     {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tiff", ".tif"}
 )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Directory helpers
+# Directory helpers (unchanged)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _temp_dir(studio_id: str, album_id: str) -> Path:
-    """Return (and create) the temp subdirectory for this studio/album."""
     d = Path(settings.TEMP_DIR) / studio_id / album_id
     d.mkdir(parents=True, exist_ok=True)
     return d
 
 
 def _image_dir(studio_id: str, album_id: str) -> Path:
-    """Return (and create) the permanent image subdirectory for this studio/album."""
     d = Path(settings.IMAGE_DIR) / studio_id / album_id
     d.mkdir(parents=True, exist_ok=True)
     return d
 
 
 def _safe_delete(path: Path) -> None:
-    """Delete a file, swallowing any OS-level errors (already gone, race, etc.)."""
     try:
         path.unlink(missing_ok=True)
-    except Exception as exc:  # pragma: no cover
+    except Exception as exc:
         logger.warning("Could not delete temp file %s: %s", path, exc)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# TempFileHandler – context manager
-#
-# Usage:
-#   with TempFileHandler(file_bytes, original_filename, studio_id, album_id) as tmp:
-#       # tmp.path is the absolute Path to the temp file
-#       do_processing(tmp.path)
-#       tmp.commit(image_dir)   # moves file to permanent location
-#   # If an exception escapes the block, temp file is deleted automatically.
+# TempFileHandler (unchanged)
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TempFileHandler:
-    """
-    Writes uploaded bytes to TEMP_DIR and tracks whether they have been
-    committed (moved) to IMAGE_DIR.  Cleans up on any failure.
-    """
-
     def __init__(
         self,
         file_bytes: bytes,
@@ -112,44 +92,31 @@ class TempFileHandler:
         self._safe_name = f"{safe_stem}{ext}"
         self._temp_path = _temp_dir(studio_id, album_id) / self._safe_name
         self._committed = False
-
-        # Write bytes to temp location immediately
         self._temp_path.write_bytes(file_bytes)
         logger.debug("Temp write: %s (%d bytes)", self._temp_path, len(file_bytes))
 
-    # ── Context manager protocol ──────────────────────────────────────────────
     def __enter__(self) -> "TempFileHandler":
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
         if not self._committed:
-            # Something went wrong (or commit() was never called) → clean up
             _safe_delete(self._temp_path)
             if exc_type is not None:
                 logger.debug(
                     "Temp file deleted after failure: %s | reason: %s",
                     self._temp_path, exc_val,
                 )
-        return False  # never suppress exceptions
+        return False
 
-    # ── Properties ────────────────────────────────────────────────────────────
     @property
     def path(self) -> Path:
-        """Absolute path to the temp file."""
         return self._temp_path
 
     @property
     def safe_name(self) -> str:
-        """UUID-based filename (e.g. 'a3f1…jpg')."""
         return self._safe_name
 
-    # ── Commit ────────────────────────────────────────────────────────────────
     def commit(self, image_dir: Path) -> Path:
-        """
-        Move the temp file to *image_dir*.
-        Must be called inside the ``with`` block after successful processing.
-        Returns the final absolute path.
-        """
         final_path = image_dir / self._safe_name
         shutil.move(str(self._temp_path), str(final_path))
         self._committed = True
@@ -158,18 +125,13 @@ class TempFileHandler:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Image validation
+# Image validation (unchanged)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _validate_image(path: Path) -> None:
-    """
-    Raise ValueError if the file at *path* cannot be opened as a valid image.
-    This catches corrupted uploads, zero-byte files, and wrong-extension tricks
-    before the heavy AI models even touch the data.
-    """
     try:
         with Image.open(path) as img:
-            img.verify()   # checks headers without decoding every pixel
+            img.verify()
     except UnidentifiedImageError as exc:
         raise ValueError(f"Not a recognisable image file: {exc}") from exc
     except Exception as exc:
@@ -177,59 +139,58 @@ def _validate_image(path: Path) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Single-file processing pipeline
-#
-# Returns (person_id | None, embedding_bytes | None, photo_status, message)
-# Raises on hard errors that should mark the file as "error" in results.
+# FIX: AI pipeline returns list of face results (multi-face support)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _run_ai_pipeline(
     temp_path: Path,
+    user_id: str,      # FIX 4: required for per-user FAISS index
     threshold: float,
-) -> Tuple[Optional[str], Optional[bytes], str, Optional[str]]:
+) -> Tuple[List[Tuple[Optional[str], Optional[bytes]]], str, Optional[str]]:
     """
-    Run detection → embedding → FAISS on the image at *temp_path*.
+    Run detection → embedding → FAISS on the image at temp_path.
 
     Returns
     -------
-    (person_id, embedding_bytes, status_str, message_str)
-      status_str  : "ok" | "no_face"
-      message_str : human-readable note (None when status is "ok")
+    (face_list, overall_status, message)
+
+    face_list : List of (person_id_or_None, embedding_bytes_or_None)
+                One entry per detected face.
+                Empty list means no face was detected.
+
+    overall_status : "ok"      – at least one face found and processed
+                     "no_face" – image is valid but no face detected
     """
-    person_id, embedding, _is_new = process_image_for_clustering(
+    # FIX 1+4: pass user_id, get back a list of face results
+    face_results = process_image_for_clustering(
         image_path=str(temp_path),
+        user_id=user_id,
         threshold=threshold,
     )
 
-    if person_id is None:
-     return None, None, "no_face", "No face detected in image"
+    if not face_results:
+        return [], "no_face", "No face detected in image"
 
-    return (
-        person_id,
-        embedding_to_bytes(embedding),
-        "ok",
-        None,
-    )
+    face_list = [
+        (person_id, embedding_to_bytes(embedding) if embedding is not None else None)
+        for person_id, embedding, _is_new in face_results
+    ]
+    return face_list, "ok", None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# POST /upload-album-photos
+# POST /photos/upload/{album_id}
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.post(
     "/upload-album-photos",
     response_model=UploadPhotosResponse,
     status_code=status.HTTP_201_CREATED,
-    summary=(
-        "Upload photos to an album. "
-        "Files land in TEMP_DIR first; "
-        "on success they move to IMAGE_DIR; "
-        "on any failure the temp file is deleted."
-    ),
+    summary="Upload photos to an album. Face detection runs automatically per photo.",
 )
 async def upload_album_photos(
     album_id: _uuid.UUID = Form(..., description="Target album UUID"),
-    files: List[UploadFile] = File(..., description="One or more image files"),
+    files: List[UploadFile] = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> UploadPhotosResponse:
@@ -239,7 +200,7 @@ async def upload_album_photos(
         db.query(Album)
         .filter(
             Album.id == album_id,
-            Album.user_id == current_user.id
+            Album.user_id == current_user.id,
         )
         .first()
     )
@@ -251,7 +212,7 @@ async def upload_album_photos(
 
     studio_id  = str(current_user.id)
     album_id_s = str(album_id)
-    img_dir    = _image_dir(studio_id, album_id_s)   # created if absent
+    img_dir    = _image_dir(studio_id, album_id_s)
 
     results:      List[UploadResult] = []
     photos_added: int = 0
@@ -262,7 +223,7 @@ async def upload_album_photos(
         original_name = upload_file.filename or "unknown"
         ext           = Path(original_name).suffix.lower()
 
-        # ── Extension guard (before reading bytes) ────────────────────────────
+        # ── Extension guard ───────────────────────────────────────────────────
         if ext not in _ALLOWED_EXTENSIONS:
             results.append(UploadResult(
                 filename=original_name,
@@ -270,7 +231,6 @@ async def upload_album_photos(
                 message=f"Unsupported file type '{ext}'. "
                         f"Allowed: {', '.join(sorted(_ALLOWED_EXTENSIONS))}",
             ))
-            logger.warning("Rejected unsupported extension: %s", original_name)
             continue
 
         # ── Read raw bytes ────────────────────────────────────────────────────
@@ -282,11 +242,9 @@ async def upload_album_photos(
                 status="error",
                 message=f"Could not read upload stream: {exc}",
             ))
-            logger.error("Stream read failed for %s: %s", original_name, exc)
             continue
 
         file_size = len(file_bytes)
-
         if file_size == 0:
             results.append(UploadResult(
                 filename=original_name,
@@ -295,27 +253,26 @@ async def upload_album_photos(
             ))
             continue
 
-        # ── Two-phase handling inside TempFileHandler context ─────────────────
+        # ── Two-phase handling ────────────────────────────────────────────────
         try:
             with TempFileHandler(file_bytes, original_name, studio_id, album_id_s) as tmp:
 
-                # Phase 1 – validate image integrity
+                # Phase 1 – validate image
                 try:
                     _validate_image(tmp.path)
                 except ValueError as exc:
-                    # __exit__ will delete temp file because commit() not called
                     results.append(UploadResult(
                         filename=original_name,
                         status="error",
                         message=str(exc),
                     ))
-                    logger.warning("Image validation failed %s: %s", original_name, exc)
-                    continue   # skip to next file; __exit__ cleans up
+                    continue
 
-                # Phase 2 – run AI pipeline
+                # Phase 2 – AI pipeline
                 try:
-                    person_id, embedding_bytes, photo_status, ai_msg = _run_ai_pipeline(
+                    face_list, photo_status, ai_msg = _run_ai_pipeline(
                         temp_path=tmp.path,
+                        user_id=studio_id,       # FIX 4
                         threshold=settings.FACE_SIMILARITY_THRESHOLD,
                     )
                 except Exception as exc:
@@ -325,51 +282,76 @@ async def upload_album_photos(
                         message=f"AI processing error: {exc}",
                     ))
                     logger.exception("AI pipeline failed for %s", original_name)
-                    continue   # __exit__ cleans up temp file
+                    continue
 
-                # ── SUCCESS: move temp → permanent ────────────────────────────
+                # ── Commit file to permanent storage ──────────────────────────
                 final_path  = tmp.commit(img_dir)
-                # Relative path stored in DB (relative to IMAGE_DIR root)
                 relative_db = str(Path(studio_id) / album_id_s / tmp.safe_name)
 
-                # ── Persist Photo row ─────────────────────────────────────────
-                if embedding_bytes is not None:
+                if photo_status == "no_face" or not face_list:
+                    # ── No face: save photo row without person/embedding ───────
+                    # FIX 2: no user_id field on Photo model
                     photo = Photo(
-                        album_id=album_id,
-                        user_id=current_user.id,
-                        img_path=relative_db,
-                        person_id=person_id,
-                        embedding=embedding_bytes,
-                        file_size=file_size,
+                        album_id  = album_id,
+                        img_path  = relative_db,
+                        person_id = None,
+                        embedding = None,
+                        file_size = file_size,
                     )
+                    db.add(photo)
+                    photos_added += 1
+                    bytes_added  += file_size
+
+                    results.append(UploadResult(
+                        filename  = original_name,
+                        status    = "no_face",
+                        person_id = None,
+                        message   = ai_msg,
+                    ))
+                    logger.info(
+                        "No face – photo saved without embedding: %s", relative_db
+                    )
+
                 else:
-                    photo = Photo(
-                        album_id=album_id,
-                        user_id=current_user.id,
-                        img_path=relative_db,
-                        person_id=None,
-                        embedding=None,
-                        file_size=file_size,
+                    # ── One or more faces: save one Photo row per face ─────────
+                    # For the UploadResult we report the first face's person_id
+                    # (most common case is one face per photo).
+                    first_result_appended = False
+
+                    for person_id, embedding_bytes in face_list:
+                        # FIX 2: no user_id field on Photo model
+                        photo = Photo(
+                            album_id  = album_id,
+                            img_path  = relative_db,
+                            person_id = person_id,
+                            embedding = embedding_bytes,
+                            file_size = file_size,
+                        )
+                        db.add(photo)
+                        photos_added += 1
+                        bytes_added  += file_size
+
+                        if not first_result_appended:
+                            results.append(UploadResult(
+                                filename  = original_name,
+                                status    = "ok",
+                                person_id = person_id,
+                                message   = (
+                                    f"{len(face_list)} face(s) detected"
+                                    if len(face_list) > 1 else None
+                                ),
+                            ))
+                            first_result_appended = True
+
+                    logger.info(
+                        "Processed %s → %d face(s) → person_ids=%s  final=%s",
+                        original_name,
+                        len(face_list),
+                        [pid for pid, _ in face_list],
+                        final_path,
                     )
-                db.add(photo)
-
-                photos_added += 1
-                bytes_added  += file_size
-
-                results.append(UploadResult(
-                    filename=original_name,
-                    status=photo_status,
-                    person_id=person_id,
-                    message=ai_msg,
-                ))
-
-                logger.info(
-                    "Processed %s → person_id=%s  status=%s  final=%s",
-                    original_name, person_id, photo_status, final_path,
-                )
 
         except Exception as exc:
-            # Outer safety net: TempFileHandler.__exit__ already cleaned up.
             results.append(UploadResult(
                 filename=original_name,
                 status="error",
@@ -388,7 +370,7 @@ async def upload_album_photos(
         )
 
     return UploadPhotosResponse(
-        album_id=album_id,
-        total_uploaded=photos_added,
-        results=results,
+        album_id       = album_id,
+        total_uploaded = photos_added,
+        results        = results,
     )
