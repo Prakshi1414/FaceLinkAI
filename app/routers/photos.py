@@ -1,29 +1,3 @@
-# app/routers/photos.py  (FIXED)
-# ─────────────────────────────────────────────────────────────────────────────
-# CHANGES FROM BROKEN VERSION
-# ────────────────────────────
-#
-# FIX 1 – process_image_for_clustering now returns a LIST (multi-face support)
-#   Old broken code called it expecting a single (person_id, emb, is_new) tuple.
-#   Now it returns List[(person_id, emb, is_new)].
-#   The router stores one Photo row per detected face.
-#   For photos with no face detected (empty list), a Photo row is still saved
-#   with person_id=None and embedding=None (so the photo isn't lost).
-#
-# FIX 2 – Removed user_id from Photo() constructor
-#   The Photo model (models.py) has NO user_id column.
-#   The broken version passed user_id= which caused a DB column error.
-#   Ownership is tracked via album_id → album.user_id, not on Photo directly.
-#
-# FIX 3 – _run_ai_pipeline updated for new return type
-#   Now returns List of (person_id, embedding_bytes, status, message) per face.
-#   The outer loop creates one Photo row per face result.
-#
-# FIX 4 – user_id passed to process_image_for_clustering
-#   The new face engine is per-user FAISS indexed. We must pass user_id so
-#   recognition stays isolated per studio.
-#
-# ─────────────────────────────────────────────────────────────────────────────
 
 from __future__ import annotations
 
