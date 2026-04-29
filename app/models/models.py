@@ -119,3 +119,20 @@ class Photo(Base):
 
     def __repr__(self) -> str:
         return f"<Photo id={self.id} person_id={self.person_id!r}>"
+class Person(Base):
+    __tablename__ = "persons"
+
+    person_id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        nullable=False,
+    )
+
+    name = Column(Text, nullable=True)
+    centroid = Column(ARRAY(Float), nullable=False)
+
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    album_id = Column(UUID(as_uuid=True), ForeignKey("albums.id"))
+
+    created_at = Column(DateTime(timezone=True), default=_utcnow)

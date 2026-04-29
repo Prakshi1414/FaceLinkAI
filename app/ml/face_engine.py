@@ -6,13 +6,15 @@ import threading
 import uuid
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
-
+from app.models.models import Person
+from sqlalchemy.orm import Session
 import faiss
 import numpy as np
 import cv2
 from PIL import Image as _PILImage, ImageOps as _ImageOps
 import tempfile
 import os
+
 
 
 logger = logging.getLogger(__name__)
@@ -239,10 +241,11 @@ def bytes_to_embedding(data: bytes) -> np.ndarray:
 def process_image_for_clustering(
     image_path: str,
     user_id: str,
+    album_id: str,
     threshold: float,
+    db: Session,
 ) -> List[Tuple[Optional[str], Optional[np.ndarray], bool]]:
-    
-    # Detect all faces and extract their embeddings (FIXED pipeline)
+
     face_embeddings = extract_and_embed_faces(image_path)
 
     if not face_embeddings:
@@ -250,22 +253,52 @@ def process_image_for_clustering(
         return []
 
     faiss_idx = get_faiss_index(user_id)
-    face_results: List[Tuple[Optional[str], Optional[np.ndarray], bool]] = []
+    face_results = []
 
     for embedding, confidence in face_embeddings:
-        # Search FAISS for nearest centroid
+
+        # 🔥 STEP 1: FAISS SEARCH
         matched_id, score = faiss_idx.search(embedding, threshold)
 
-        is_new    = matched_id is None
-        person_id = matched_id if matched_id else str(uuid.uuid4())
+        is_new = matched_id is None
 
-        # Update centroid in FAISS
+        # 🔥 STEP 2: DB LOGIC
+        if matched_id is None:
+            new_person = Person(
+                name="Unknown",
+                centroid=embedding.tolist(),
+                user_id=user_id,
+                album_id=album_id,
+            )
+
+            db.add(new_person)
+            db.commit()
+            db.refresh(new_person)
+
+            person_id = str(new_person.person_id)
+
+        else:
+            person_id = matched_id
+
+            person = db.query(Person).filter(Person.person_id == matched_id).first()
+            if person:
+                old = np.array(person.centroid)
+                updated = (old + embedding) / 2
+                person.centroid = updated.tolist()
+                db.commit()
+
+        # 🔥 STEP 3: FAISS UPDATE
         faiss_idx.add_or_update(person_id, embedding)
 
         logger.debug(
-            "Image %s → person_id=%s  score=%.4f  new=%s  confidence=%.3f",
-            Path(image_path).name, person_id, score, is_new, confidence,
+            "Image %s → person_id=%s score=%.4f new=%s confidence=%.3f",
+            Path(image_path).name,
+            person_id,
+            score,
+            is_new,
+            confidence,
         )
+
         face_results.append((person_id, embedding, is_new))
 
     return face_results

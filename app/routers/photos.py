@@ -118,8 +118,10 @@ def _validate_image(path: Path) -> None:
 
 def _run_ai_pipeline(
     temp_path: Path,
-    user_id: str,      # FIX 4: required for per-user FAISS index
+    user_id: str,    
+    album_id: str,  
     threshold: float,
+    db: Session,
 ) -> Tuple[List[Tuple[Optional[str], Optional[bytes]]], str, Optional[str]]:
     """
     Run detection → embedding → FAISS on the image at temp_path.
@@ -130,7 +132,7 @@ def _run_ai_pipeline(
 
     face_list : List of (person_id_or_None, embedding_bytes_or_None)
                 One entry per detected face.
-                Empty list means no face was detected.
+                Empty list means no face was detected
 
     overall_status : "ok"      – at least one face found and processed
                      "no_face" – image is valid but no face detected
@@ -139,7 +141,9 @@ def _run_ai_pipeline(
     face_results = process_image_for_clustering(
         image_path=str(temp_path),
         user_id=user_id,
+        album_id=album_id,
         threshold=threshold,
+        db=db,
     )
 
     if not face_results:
@@ -246,8 +250,10 @@ async def upload_album_photos(
                 try:
                     face_list, photo_status, ai_msg = _run_ai_pipeline(
                         temp_path=tmp.path,
-                        user_id=studio_id,       # FIX 4
+                        user_id=current_user.id,
+                        album_id=str(album_id),       # FIX 4
                         threshold=settings.FACE_SIMILARITY_THRESHOLD,
+                        db=db,                  # FIX 4 
                     )
                 except Exception as exc:
                     results.append(UploadResult(
@@ -271,6 +277,7 @@ async def upload_album_photos(
                         person_id = None,
                         embedding = None,
                         file_size = file_size,
+                        
                     )
                     db.add(photo)
                     photos_added += 1
@@ -300,6 +307,7 @@ async def upload_album_photos(
                             person_id = person_id,
                             embedding = embedding_bytes,
                             file_size = file_size,
+                            
                         )
                         db.add(photo)
                         photos_added += 1
