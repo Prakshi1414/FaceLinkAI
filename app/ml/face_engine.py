@@ -109,9 +109,23 @@ faiss_indexes: Dict[str, FAISSPersonIndex] = {}
 faiss_index: FAISSPersonIndex = FAISSPersonIndex()
 
 
-def get_faiss_index(user_id: str) -> FAISSPersonIndex:
+def get_faiss_index(user_id: str, db: Session) -> FAISSPersonIndex:
     if user_id not in faiss_indexes:
-        faiss_indexes[user_id] = FAISSPersonIndex()
+        index = FAISSPersonIndex()
+
+        # 🔥 DB se centroids load karo
+        persons = db.query(Person).filter(Person.user_id == user_id).all()
+
+        centroids = {}
+        for p in persons:
+            if p.centroid:
+                emb = np.array(p.centroid, dtype="float32")
+                centroids[str(p.person_id)] = emb
+
+        index.load_from_db(centroids)
+
+        faiss_indexes[user_id] = index
+
     return faiss_indexes[user_id]
 
 

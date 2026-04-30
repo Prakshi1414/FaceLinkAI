@@ -49,7 +49,7 @@ async def recognize_face(
 
     # ── 2. FAISS search (per-user index) ──────────────────────────────────────
     user_id    = str(current_user.id)
-    user_index = get_faiss_index(user_id)
+    user_index = get_faiss_index(user_id, db)
 
     if user_index.total_persons == 0:
         return RecognizeResponse(
