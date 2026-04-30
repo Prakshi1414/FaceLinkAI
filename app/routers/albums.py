@@ -202,7 +202,7 @@ def public_album(
     event_date=album.event_date,
     total_photos=album.total_photos,
     photos=[
-        PublicPhotoItem(id=p.id, img_path=p.img_path, person_id=p.person_id)
+        PublicPhotoItem(id=p.id, img_path=p.img_path, person_id=str(p.person_id) if p.person_id else None)
         for p in photos
     ],
 )
