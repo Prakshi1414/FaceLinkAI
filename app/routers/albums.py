@@ -169,7 +169,7 @@ def toggle_share(
 # GET /album/share/{share_link}   ← PUBLIC (no auth)
 # ─────────────────────────────────────────────────────────────────────────────
 @router.get(
-    "/album/share",
+    "/album/share/{share_link}",
     response_model=PublicAlbumResponse,
     summary="Public: view album via share link (no login required)",
 )
