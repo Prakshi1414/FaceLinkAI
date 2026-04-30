@@ -47,7 +47,14 @@ def _get_album_or_404(album_id: _uuid.UUID, user: User, db: Session):
         .first()
     )
     if not album:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Album not found.")
+        raise HTTPException(
+    status_code=200,
+    detail={
+        "status": False,
+        "message": "Invalid mobile number or password",
+        "data": None
+    }
+)
     return album
 
 

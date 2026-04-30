@@ -55,11 +55,15 @@ def _decode_token(token: str) -> str:
         return subject
     except JWTError as exc:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
+            status_code=200,
+            detail={
+                "status": False,
+                "message": "Invalid or expired token",
+                "data": None
+            },
             headers={"WWW-Authenticate": "Bearer"},
         ) from exc
-    
+            
 # ── FastAPI dependency ────────────────────────────────────────────────────────
 def get_current_user(
     token: HTTPAuthorizationCredentials = Depends(oauth2_scheme),
@@ -69,9 +73,23 @@ def get_current_user(
     try:
         user_uuid = uuid.UUID(user_id_str)
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token subject") from exc
+        raise HTTPException(
+            status_code=200,
+            detail={
+                "status": False,
+                "message": "Invalid token subject",
+                "data": None
+            }
+        ) from exc
 
     user = db.query(User).filter(User.id == user_uuid).first()
     if user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+        raise HTTPException(
+            status_code=200,
+            detail={
+                "status": False,
+                "message": "User not found",
+                "data": None
+            }
+        )
     return user

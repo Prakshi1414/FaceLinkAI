@@ -24,6 +24,7 @@ from app.utils.auth import get_current_user
 router = APIRouter(tags=["Recognition"])
 logger = logging.getLogger(__name__)
 
+
 @router.post(
     "/recognize-face",
     response_model=RecognizeResponse,
@@ -37,13 +38,24 @@ async def recognize_face(
     # ── 1. Read image bytes and extract embedding ─────────────────────────────
     image_bytes = await file.read()
     if not image_bytes:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty file.")
+        raise HTTPException(
+            status_code=200,
+            detail={
+                "status": False,
+                "message": "Empty file",
+                "data": None
+            }
+        )
 
     embedding = get_embedding_for_query(image_bytes)
     if embedding is None:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="No face detected in the uploaded image. Please use a clear frontal face photo.",
+            status_code=200,
+            detail={
+                "status": False,
+                "message": "No face detected. Please upload a clear frontal face image",
+                "data": None
+            }
         )
 
     # ── 2. FAISS search (per-user index) ──────────────────────────────────────

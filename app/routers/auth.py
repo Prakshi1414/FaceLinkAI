@@ -46,16 +46,25 @@ def register_user(
 ):
     # Check uniqueness
     if db.query(User).filter(User.mobile_number == payload.mobile_number).first():
+
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Mobile number already registered.",
+            status_code=200,
+            detail={
+                "status": False,
+                "message": "Mobile number already registered",
+                "data": None
+            }
         )
     if payload.email:
         if db.query(User).filter(User.email == payload.email).first():
             raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Email already registered.",
-            )
+                status_code=200,
+                detail={
+                    "status": False,
+                    "message": "Email already registered",
+                    "data": None
+                }
+           )
 
     user = User(
         studio_name=payload.studio_name if payload.studio_name else "User",
@@ -68,8 +77,16 @@ def register_user(
     db.commit()
     db.refresh(user)
     logger.info("New studio registered: %s (id=%s)", user.studio_name, user.id)
-    return user
-
+    return {
+    "status": True,
+    "message": "User registered successfully",
+    "data": {
+        "user_id": str(user.id),
+        "studio_name": user.studio_name,
+        "mobile_number": user.mobile_number,
+        "email": user.email
+    }
+}
 
 # ─────────────────────────────────────────────────────────────────────────────
 # POST /login-user
@@ -90,16 +107,23 @@ def login_user(
     )
     if not user or not verify_password(payload.password, user.password_hash):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid mobile number or password.",
+            status_code=200,
+            detail={
+                "status": False,
+                "message": "Invalid mobile number or password",
+                "data": None
+            }
         )
 
     token = create_access_token(subject=str(user.id))
-    return TokenResponse(
-        access_token=token,
-        token_type="bearer",
-        studio_name=user.studio_name,
-        user_id=user.id,
-        username=user.username
-
-    )
+    return {
+    "status": True,
+    "message": "Login successful",
+    "data": {
+        "access_token": token,
+        "token_type": "bearer",
+        "studio_name": user.studio_name,
+        "user_id": str(user.id),
+        "username": user.username
+    }
+}

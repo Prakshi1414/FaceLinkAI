@@ -184,8 +184,12 @@ async def upload_album_photos(
     )
     if not album:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Album not found.",
+            status_code=200,
+            detail={
+                "status": False,
+                "message": "Album not found",
+                "data": None
+            }
         )
 
     studio_id  = str(current_user.id)
