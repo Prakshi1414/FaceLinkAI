@@ -4,14 +4,13 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 from __future__ import annotations
-
+from pydantic import field_validator
+import re
 import uuid
 from datetime import date, datetime
 from typing import List, Optional
-from pydantic import BaseModel, EmailStr, Field
-
+from pydantic import BaseModel, EmailStr, Field,field_validator
 from app.models.models import User
-
 
 # ═════════════════════════════════════════════════════════════════════════════
 # AUTH
@@ -23,6 +22,38 @@ class RegisterUserRequest(BaseModel):
     email:         Optional[EmailStr] = None
     password:      str          = Field(..., min_length=6)
     username: str 
+
+    @field_validator("mobile_number")
+    def validate_phone(cls, v):
+        if not v.isdigit() or len(v) != 10:
+            raise ValueError("Phone must be exactly 10 digits (0-9 only)")
+        return v
+    
+    @field_validator("email")
+    def validate_email(cls, v):
+        if v is None:
+            return v
+
+        pattern = r"^[\w\.-]+@[\w\.-]+\.com$"
+        if not re.match(pattern, v):
+            raise ValueError("Email must contain @ and .com")
+
+        return v
+    
+    @field_validator("password")
+    def validate_password(cls, v):
+
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters")
+
+        if v.isdigit() or v.isalpha():
+            raise ValueError("Password must include letters and numbers")
+
+        weak = ["123456", "abcdef", "password", "111111", "000000"]
+        if any(x in v.lower() for x in weak):
+            raise ValueError("Password is too weak or sequential")
+
+        return v
 
 class RegisterUserResponse(BaseModel):
     id:            uuid.UUID
@@ -37,6 +68,12 @@ class RegisterUserResponse(BaseModel):
 class LoginRequest(BaseModel):
     mobile_number: str
     password:      str
+
+    @field_validator("mobile_number")
+    def validate_phone(cls, v):
+        if not v.isdigit() or len(v) != 10:
+            raise ValueError("Mobile number must be exactly 10 digits")
+        return v
 
 
 class TokenResponse(BaseModel):
@@ -137,7 +174,6 @@ class RecognizeResponse(BaseModel):
     is_new_person:    bool
     similarity_score: Optional[float]
     matched_photos:   List[RecognizedPhoto]
-
 
 # ═════════════════════════════════════════════════════════════════════════════
 # GALLERY
