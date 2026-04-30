@@ -8,7 +8,6 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime
 from typing import List, Optional
-
 from pydantic import BaseModel, EmailStr, Field
 
 from app.models.models import User
@@ -62,12 +61,14 @@ class AlbumResponse(BaseModel):
     event_date: Optional[date]
     total_photos: int
     total_size: int
-    share_link: str
+    share_link: Optional[str] 
     is_active: bool
     created_at: datetime
 
     model_config = {"from_attributes": True}
 
+class ShareLinkRequest(BaseModel):
+    album_id: uuid.UUID
 
 class ShareLinkResponse(BaseModel):
     album_id:   uuid.UUID

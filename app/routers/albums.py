@@ -14,8 +14,9 @@ import logging
 import uuid as _uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from requests import request
 from sqlalchemy.orm import Session
-
+from app.schemas.schemas import ShareLinkRequest
 from app.db.database import get_db
 from app.models.models import Album, Photo, User
 from app.schemas.schemas import (
@@ -27,6 +28,7 @@ from app.schemas.schemas import (
     PublicPhotoItem,
     ShareLinkResponse,
 )
+from app.schemas.schemas import ShareLinkRequest
 from app.utils.auth import get_current_user
 
 router = APIRouter(tags=["Albums"])
@@ -66,7 +68,8 @@ def create_album(
     user_id=current_user.id,
     album_name=payload.album_name,
     event_date=payload.event_date,
-    share_link=_uuid.uuid4().hex,
+    share_link=None,  
+    is_active=False 
 )
     db.add(album)
     db.commit()
@@ -115,15 +118,16 @@ def get_album(
 # POST /album/{album_id}/generate-share-link
 # ─────────────────────────────────────────────────────────────────────────────
 @router.post(
-    "/album/{album_id}/generate-share-link",
+    "/album/generate-share-link",
     response_model=ShareLinkResponse,
     summary="Generate (or regenerate) a unique share link for an album",
 )
 def generate_share_link(
-    album_id: _uuid.UUID,
+    request: ShareLinkRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    album_id = request.album_id
     album = _get_album_or_404(album_id, current_user, db)
     album.share_link = _uuid.uuid4().hex   # Regenerate token
     album.is_active  = True
@@ -140,15 +144,16 @@ def generate_share_link(
 # POST /album/{album_id}/toggle-share
 # ─────────────────────────────────────────────────────────────────────────────
 @router.post(
-    "/album/{album_id}/toggle-share",
+    "/album/toggle-share",
     response_model=ShareLinkResponse,
     summary="Toggle album sharing on/off",
 )
 def toggle_share(
-    album_id: _uuid.UUID,
+    request: ShareLinkRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    album_id = request.album_id 
     album = _get_album_or_404(album_id, current_user, db)
     album.is_active = not album.is_active
     db.commit()
@@ -164,7 +169,7 @@ def toggle_share(
 # GET /album/share/{share_link}   ← PUBLIC (no auth)
 # ─────────────────────────────────────────────────────────────────────────────
 @router.get(
-    "/album/share/{share_link}",
+    "/album/share",
     response_model=PublicAlbumResponse,
     summary="Public: view album via share link (no login required)",
 )
@@ -172,6 +177,7 @@ def public_album(
     share_link: str,
     db: Session = Depends(get_db),
 ):
+
     album = (
         db.query(Album)
         .filter(Album.share_link == share_link, Album.is_active == True)  # noqa: E712

@@ -71,8 +71,8 @@ class Album(Base):
     event_date   = Column(Date, nullable=True)
     total_photos = Column(Integer, default=0, nullable=False)
     total_size   = Column(BigInteger, default=0, nullable=False)   # bytes
-    share_link   = Column(String(64), unique=True, nullable=False, default=lambda: uuid.uuid4().hex)
-    is_active    = Column(Boolean, default=True, nullable=False)
+    share_link = Column(String(64), unique=True, nullable=True)
+    is_active = Column(Boolean, default=False, nullable=False)
     created_at   = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
 
     # ── Relationships ─────────────────────────────────────────────────────────
