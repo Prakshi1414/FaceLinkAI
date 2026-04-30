@@ -113,6 +113,9 @@ def get_faiss_index(user_id: str, db: Session) -> FAISSPersonIndex:
     if user_id not in faiss_indexes:
         index = FAISSPersonIndex()
 
+        if db is not None:
+            persons = db.query(Person).filter(Person.user_id == user_id).all()
+
         # 🔥 DB se centroids load karo
         persons = db.query(Person).filter(Person.user_id == user_id).all()
 
@@ -266,7 +269,7 @@ def process_image_for_clustering(
         logger.debug("No face detected in %s", image_path)
         return []
 
-    faiss_idx = get_faiss_index(user_id)
+    faiss_idx = get_faiss_index(user_id,db)
     face_results = []
 
     for embedding, confidence in face_embeddings:

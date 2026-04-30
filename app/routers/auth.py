@@ -58,7 +58,7 @@ def register_user(
             )
 
     user = User(
-        studio_name=payload.studio_name,
+        studio_name=payload.studio_name if payload.studio_name else "User",
         mobile_number=payload.mobile_number,
         email=payload.email,
         username=payload.username,

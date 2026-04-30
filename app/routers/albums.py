@@ -12,7 +12,8 @@ from __future__ import annotations
 
 import logging
 import uuid as _uuid
-
+from app.utils.auth import get_current_user
+from app.models.models import User
 from fastapi import APIRouter, Depends, HTTPException, status
 from requests import request
 from sqlalchemy.orm import Session
@@ -176,6 +177,7 @@ def toggle_share(
 def public_album(
     share_link: str,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),  
 ):
 
     album = (
@@ -185,8 +187,8 @@ def public_album(
     )
     if not album:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Share link is invalid or sharing has been disabled.",
+            status_code=401,
+            detail="LOGIN_REQUIRED"
         )
 
     photos = (

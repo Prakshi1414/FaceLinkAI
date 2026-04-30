@@ -24,7 +24,6 @@ from app.utils.auth import get_current_user
 router = APIRouter(tags=["Recognition"])
 logger = logging.getLogger(__name__)
 
-
 @router.post(
     "/recognize-face",
     response_model=RecognizeResponse,

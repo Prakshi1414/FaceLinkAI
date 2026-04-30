@@ -30,6 +30,7 @@ class Base(DeclarativeBase):
 
 # ── FastAPI dependency ────────────────────────────────────────────────────────
 def get_db():
+    print("🔥 CONNECTED DB:", engine.url)
     db = SessionLocal()
     try:
         yield db
