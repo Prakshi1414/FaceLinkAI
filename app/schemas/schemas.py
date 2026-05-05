@@ -10,26 +10,27 @@ import uuid
 from datetime import date, datetime
 from typing import Any, Optional
 from typing import List, Optional
-from pydantic import BaseModel, EmailStr, Field,field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from app.models.models import User
 
 # ═════════════════════════════════════════════════════════════════════════════
 # AUTH
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class RegisterUserRequest(BaseModel):
-    studio_name:   str          = Field(..., min_length=2, max_length=120)
-    mobile_number: str          = Field(..., min_length=7, max_length=20)
+    studio_name:   str = Field(..., min_length=2, max_length=120)
+    mobile_number: str = Field(..., min_length=7, max_length=20)
     email:         Optional[EmailStr] = None
-    password:      str          = Field(..., min_length=6)
-    username: str 
+    password:      str = Field(..., min_length=6)
+    username: str
 
     @field_validator("mobile_number")
     def validate_phone(cls, v):
         if not v.isdigit() or len(v) != 10:
             raise ValueError("Phone must be exactly 10 digits (0-9 only)")
         return v
-    
+
     @field_validator("email")
     def validate_email(cls, v):
         if v is None:
@@ -40,7 +41,7 @@ class RegisterUserRequest(BaseModel):
             raise ValueError("Email must contain @ and .com")
 
         return v
-    
+
     @field_validator("password")
     def validate_password(cls, v):
 
@@ -55,6 +56,7 @@ class RegisterUserRequest(BaseModel):
             raise ValueError("Password is too weak or sequential")
 
         return v
+
 
 class RegisterUserResponse(BaseModel):
     id:            uuid.UUID
@@ -82,14 +84,15 @@ class TokenResponse(BaseModel):
     token_type:   str = "bearer"
     studio_name:  str
     user_id:      uuid.UUID
-    username : str
+    username: str
 
 # ═════════════════════════════════════════════════════════════════════════════
 # ALBUM
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class CreateAlbumRequest(BaseModel):
-    album_name:  str            = Field(..., min_length=1, max_length=200)
+    album_name:  str = Field(..., min_length=1, max_length=200)
     event_date:  Optional[date] = None
 
 
@@ -99,14 +102,16 @@ class AlbumResponse(BaseModel):
     event_date: Optional[date]
     total_photos: int
     total_size: int
-    share_link: Optional[str] 
+    share_link: Optional[str]
     is_active: bool
     created_at: datetime
-
+    photos: List[PhotoResponse]
     model_config = {"from_attributes": True}
+
 
 class ShareLinkRequest(BaseModel):
     album_id: uuid.UUID
+
 
 class ShareLinkResponse(BaseModel):
     album_id:   uuid.UUID
@@ -122,7 +127,7 @@ class PhotoResponse(BaseModel):
     id:          uuid.UUID
     album_id:    uuid.UUID
     img_path:    str
-    person_id:   Optional[str]
+    person_id: Optional[uuid.UUID]
     file_size:   int
     uploaded_at: datetime
 
@@ -180,6 +185,7 @@ class RecognizeResponse(BaseModel):
 # GALLERY
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class PersonGroup(BaseModel):
     person_id:    str
     total_photos: int
@@ -193,7 +199,7 @@ class AlbumGallery(BaseModel):
 
 
 class GalleryResponse(BaseModel):
-    user_id: uuid.UUID   
+    user_id: uuid.UUID
     albums:    List[AlbumGallery]
 
 

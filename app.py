@@ -1,1570 +1,1330 @@
-
-
 import streamlit as st
 import requests
-import json
+import os
+import zipfile
+import io
 from datetime import date, datetime
 from typing import Optional
-import time
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CONFIG
 # ─────────────────────────────────────────────────────────────────────────────
-BASE_URL = "http://127.0.0.1:8000"
-# ─────────────────────────────────────────────────────────────────────────────
-# PAGE CONFIG
-# ─────────────────────────────────────────────────────────────────────────────
+API_BASE   = "http://127.0.0.1:8000"
+IMAGE_BASE = f"{API_BASE}/images"
+
 st.set_page_config(
-    page_title="FaceLinkAI",
-    page_icon="⬡",
+    page_title="FaceLinkAI Studio",
+    page_icon="🔗",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
-# GLOBAL STYLES
+# GLOBAL CSS
 # ─────────────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&family=Instrument+Sans:wght@400;500;600&display=swap');
-
-/* ── Root Variables ── */
-:root {
-    --bg-primary: #080B12;
-    --bg-secondary: #0E1420;
-    --bg-card: #111827;
-    --bg-card-hover: #161E2E;
-    --accent-cyan: #00E5FF;
-    --accent-lime: #AAFF00;
-    --accent-violet: #8B5CF6;
-    --accent-orange: #FF6B35;
-    --text-primary: #F0F4FF;
-    --text-secondary: #8B9AB2;
-    --text-muted: #4A5568;
-    --border: #1E2A3A;
-    --border-accent: #00E5FF33;
-    --success: #10B981;
-    --error: #EF4444;
-    --warning: #F59E0B;
-    --glow-cyan: 0 0 20px #00E5FF33, 0 0 40px #00E5FF11;
-    --glow-lime: 0 0 20px #AAFF0033;
-    --radius: 12px;
-    --radius-lg: 20px;
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+html,body,[class*="css"]{font-family:'Inter',sans-serif;}
+#MainMenu,footer,header{visibility:hidden;}
+.block-container{padding:0!important;max-width:100%!important;}
+section[data-testid="stSidebar"]{display:none;}
+:root{
+  --navy:#0a1628;--navy2:#0f1e35;--blue:#1a6dff;--blue-l:#5b9dff;
+  --blue-dim:rgba(26,109,255,.15);--blue-bd:rgba(26,109,255,.35);
+  --green:#1d9e75;--red:#e24b4a;--amber:#ef9f27;
+  --bg:#f0f4f9;--card:#ffffff;--border:rgba(0,0,0,.08);
+  --t1:#0d1b2a;--t2:#5a6a7e;--t3:#96a3b1;
 }
-
-/* ── Base Reset ── */
-* { box-sizing: border-box; }
-html, body, [data-testid="stAppViewContainer"] {
-    background-color: var(--bg-primary) !important;
-    color: var(--text-primary) !important;
-    font-family: 'Instrument Sans', sans-serif;
-}
-
-/* ── Streamlit Chrome Cleanup ── */
-[data-testid="stHeader"] { background: transparent !important; }
-[data-testid="stToolbar"] { display: none !important; }
-#MainMenu { visibility: hidden; }
-footer { visibility: hidden; }
-[data-testid="stDecoration"] { display: none !important; }
-
-/* ── Sidebar ── */
-[data-testid="stSidebar"] {
-    background: var(--bg-secondary) !important;
-    border-right: 1px solid var(--border) !important;
-}
-[data-testid="stSidebar"] > div:first-child {
-    padding-top: 1.5rem;
-}
-[data-testid="stSidebarNav"] { display: none; }
-
-/* ── Scrollbar ── */
-::-webkit-scrollbar { width: 4px; height: 4px; }
-::-webkit-scrollbar-track { background: var(--bg-primary); }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: var(--accent-cyan); }
-
-/* ── Inputs ── */
-[data-testid="stTextInput"] > div > div > input,
-[data-testid="stTextInput"] > div > div,
-.stTextInput > div > div > input {
-    background: var(--bg-card) !important;
-    border: 1px solid var(--border) !important;
-    border-radius: var(--radius) !important;
-    color: var(--text-primary) !important;
-    font-family: 'DM Mono', monospace !important;
-    font-size: 0.875rem !important;
-    transition: border-color 0.2s, box-shadow 0.2s !important;
-}
-[data-testid="stTextInput"] > div > div > input:focus {
-    border-color: var(--accent-cyan) !important;
-    box-shadow: var(--glow-cyan) !important;
-    outline: none !important;
-}
-[data-testid="stTextInput"] label,
-.stTextInput label {
-    color: var(--text-secondary) !important;
-    font-family: 'DM Mono', monospace !important;
-    font-size: 0.75rem !important;
-    letter-spacing: 0.1em !important;
-    text-transform: uppercase !important;
-}
-
-/* ── Date Input ── */
-[data-testid="stDateInput"] > div > div,
-.stDateInput > div > div {
-    background: var(--bg-card) !important;
-    border: 1px solid var(--border) !important;
-    border-radius: var(--radius) !important;
-    color: var(--text-primary) !important;
-}
-[data-testid="stDateInput"] label {
-    color: var(--text-secondary) !important;
-    font-family: 'DM Mono', monospace !important;
-    font-size: 0.75rem !important;
-    letter-spacing: 0.1em !important;
-    text-transform: uppercase !important;
-}
-
-/* ── Buttons ── */
-.stButton > button {
-    background: linear-gradient(135deg, var(--accent-cyan) 0%, #0099BB 100%) !important;
-    color: var(--bg-primary) !important;
-    border: none !important;
-    border-radius: var(--radius) !important;
-    font-family: 'Syne', sans-serif !important;
-    font-weight: 700 !important;
-    font-size: 0.85rem !important;
-    letter-spacing: 0.05em !important;
-    padding: 0.6rem 1.5rem !important;
-    transition: all 0.2s !important;
-    box-shadow: var(--glow-cyan) !important;
-    width: 100% !important;
-}
-.stButton > button:hover {
-    transform: translateY(-2px) !important;
-    box-shadow: 0 0 30px #00E5FF55, 0 0 60px #00E5FF22 !important;
-}
-.stButton > button:active {
-    transform: translateY(0px) !important;
-}
-
-/* ── File Uploader ── */
-[data-testid="stFileUploader"] {
-    background: var(--bg-card) !important;
-    border: 1px dashed var(--border) !important;
-    border-radius: var(--radius-lg) !important;
-    transition: border-color 0.2s !important;
-}
-[data-testid="stFileUploader"]:hover {
-    border-color: var(--accent-cyan) !important;
-}
-[data-testid="stFileUploader"] label {
-    color: var(--text-secondary) !important;
-    font-family: 'DM Mono', monospace !important;
-}
-[data-testid="stFileUploaderDropzone"] {
-    background: transparent !important;
-}
-
-/* ── Selectbox ── */
-[data-testid="stSelectbox"] > div > div {
-    background: var(--bg-card) !important;
-    border: 1px solid var(--border) !important;
-    border-radius: var(--radius) !important;
-    color: var(--text-primary) !important;
-}
-[data-testid="stSelectbox"] label {
-    color: var(--text-secondary) !important;
-    font-family: 'DM Mono', monospace !important;
-    font-size: 0.75rem !important;
-    letter-spacing: 0.1em !important;
-    text-transform: uppercase !important;
-}
-
-/* ── Metrics ── */
-[data-testid="metric-container"] {
-    background: var(--bg-card) !important;
-    border: 1px solid var(--border) !important;
-    border-radius: var(--radius) !important;
-    padding: 1rem 1.25rem !important;
-}
-[data-testid="metric-container"] [data-testid="stMetricLabel"] {
-    color: var(--text-secondary) !important;
-    font-family: 'DM Mono', monospace !important;
-    font-size: 0.7rem !important;
-    text-transform: uppercase !important;
-    letter-spacing: 0.1em !important;
-}
-[data-testid="metric-container"] [data-testid="stMetricValue"] {
-    color: var(--accent-cyan) !important;
-    font-family: 'Syne', sans-serif !important;
-    font-weight: 800 !important;
-}
-
-/* ── Tabs ── */
-[data-testid="stTabs"] [data-baseweb="tab-list"] {
-    background: var(--bg-card) !important;
-    border-radius: var(--radius) !important;
-    padding: 4px !important;
-    gap: 4px !important;
-    border: 1px solid var(--border) !important;
-}
-[data-testid="stTabs"] [data-baseweb="tab"] {
-    background: transparent !important;
-    border-radius: 8px !important;
-    color: var(--text-secondary) !important;
-    font-family: 'Syne', sans-serif !important;
-    font-weight: 600 !important;
-    font-size: 0.8rem !important;
-    letter-spacing: 0.05em !important;
-    padding: 0.5rem 1rem !important;
-    transition: all 0.2s !important;
-}
-[data-testid="stTabs"] [aria-selected="true"] {
-    background: var(--accent-cyan) !important;
-    color: var(--bg-primary) !important;
-}
-
-/* ── Expander ── */
-[data-testid="stExpander"] {
-    background: var(--bg-card) !important;
-    border: 1px solid var(--border) !important;
-    border-radius: var(--radius) !important;
-}
-[data-testid="stExpander"] summary {
-    color: var(--text-primary) !important;
-    font-family: 'Syne', sans-serif !important;
-    font-weight: 600 !important;
-}
-
-/* ── Alert / Info boxes ── */
-[data-testid="stAlert"] {
-    border-radius: var(--radius) !important;
-    font-family: 'DM Mono', monospace !important;
-    font-size: 0.85rem !important;
-}
-
-/* ── Columns gap ── */
-[data-testid="column"] { gap: 0.75rem; }
-
-/* ── Image containers ── */
-[data-testid="stImage"] img {
-    border-radius: var(--radius) !important;
-    border: 1px solid var(--border) !important;
-}
-
-/* ── Divider ── */
-hr {
-    border-color: var(--border) !important;
-    margin: 1.5rem 0 !important;
-}
-
-/* ── Spinner ── */
-[data-testid="stSpinner"] { color: var(--accent-cyan) !important; }
-
-/* ── Progress ── */
-[data-testid="stProgress"] > div > div {
-    background: linear-gradient(90deg, var(--accent-cyan), var(--accent-lime)) !important;
-    border-radius: 4px !important;
-}
-
+/* Navbar */
+.fl-nav{background:var(--navy);padding:0 2rem;height:56px;display:flex;align-items:center;
+  justify-content:space-between;position:sticky;top:0;z-index:999;}
+.fl-logo{display:flex;align-items:center;gap:10px;}
+.fl-logo-icon{width:34px;height:34px;background:var(--blue);border-radius:8px;
+  display:flex;align-items:center;justify-content:center;font-size:16px;}
+.fl-logo-text{font-size:17px;font-weight:600;color:#fff;letter-spacing:-.3px;}
+.fl-nav-right{display:flex;align-items:center;gap:14px;}
+.fl-studio-name{font-size:13px;color:#8899bb;}
+.fl-avatar{width:32px;height:32px;border-radius:50%;background:#1a4aaa;
+  display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:#fff;}
+/* Page wrapper */
+.fl-page{background:var(--bg);min-height:calc(100vh - 56px);padding:2rem 2.5rem;}
+/* Auth */
+.auth-left{background:var(--navy);padding:3rem;min-height:100vh;display:flex;flex-direction:column;justify-content:space-between;}
+.auth-badge{display:inline-flex;align-items:center;gap:6px;background:var(--blue-dim);
+  border:1px solid var(--blue-bd);border-radius:20px;padding:4px 12px;
+  font-size:11px;color:var(--blue-l);margin-bottom:16px;}
+.auth-badge-dot{width:6px;height:6px;border-radius:50%;background:var(--blue);display:inline-block;}
+.auth-tagline h2{font-size:24px;font-weight:600;color:#fff;margin-bottom:10px;line-height:1.3;}
+.auth-tagline p{font-size:14px;color:#8899bb;line-height:1.6;}
+/* Cards */
+.fl-card{background:var(--card);border:.5px solid var(--border);border-radius:14px;padding:1.5rem;margin-bottom:1rem;}
+.fl-card-dark{background:var(--navy);border-radius:14px;padding:1.25rem 1.5rem;margin-bottom:1rem;}
+/* Stat cards */
+.stat-card{background:var(--card);border:.5px solid var(--border);border-radius:10px;padding:1rem 1.25rem;}
+.stat-label{font-size:11px;color:var(--t2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;}
+.stat-val{font-size:26px;font-weight:600;color:var(--t1);}
+.stat-hint{font-size:11px;color:var(--t3);margin-top:2px;}
+/* Album cards */
+.album-card{background:var(--card);border:.5px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:.75rem;}
+.album-thumb{height:110px;display:flex;align-items:center;justify-content:center;position:relative;}
+.album-badge{position:absolute;top:8px;right:8px;background:rgba(0,0,0,.45);border-radius:20px;padding:3px 9px;font-size:11px;color:#fff;}
+.share-pill{position:absolute;top:8px;left:8px;background:rgba(26,109,255,.82);border-radius:20px;padding:3px 9px;font-size:10px;color:#fff;}
+.album-info{padding:12px 14px;}
+.album-name{font-size:14px;font-weight:600;color:var(--t1);margin-bottom:3px;}
+.album-meta{font-size:11px;color:var(--t2);}
+.album-footer{display:flex;align-items:center;justify-content:space-between;margin-top:10px;
+  padding-top:10px;border-top:.5px solid var(--border);}
+.status-dot{width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:5px;}
+.chip{font-size:10px;background:#f0f4f9;border:.5px solid var(--border);border-radius:20px;padding:2px 8px;color:var(--t2);}
+/* Photo grid */
+.photo-item{border-radius:10px;overflow:hidden;margin-bottom:8px;position:relative;background:#0f1e35;}
+.photo-person-tag{position:absolute;bottom:5px;left:5px;background:rgba(0,0,0,.6);
+  border-radius:10px;padding:2px 7px;font-size:9px;color:#fff;}
+/* Buttons */
+.stButton>button{background:var(--blue)!important;color:#fff!important;border:none!important;
+  border-radius:8px!important;font-size:13px!important;font-weight:500!important;
+  padding:.45rem 1.2rem!important;transition:opacity .15s!important;}
+.stButton>button:hover{opacity:.9!important;}
+/* Alerts */
+.fl-err{display:flex;align-items:center;gap:10px;background:#fff0f0;border:.5px solid #fca5a5;
+  border-radius:8px;padding:10px 14px;margin-bottom:14px;}
+.fl-err span{font-size:13px;color:#b91c1c;}
+.fl-ok{display:flex;align-items:center;gap:10px;background:#f0fdf4;border:.5px solid #86efac;
+  border-radius:8px;padding:10px 14px;margin-bottom:14px;}
+.fl-ok span{font-size:13px;color:#15803d;}
+.fl-info{display:flex;align-items:center;gap:10px;background:#eff6ff;border:.5px solid #93c5fd;
+  border-radius:8px;padding:10px 14px;margin-bottom:14px;}
+.fl-info span{font-size:13px;color:#1d4ed8;}
+/* Upload zone */
+.upload-zone{border:2px dashed #cbd5e1;border-radius:14px;padding:2rem;text-align:center;background:var(--card);margin-bottom:1rem;}
+/* Section heading */
+.fl-sh{font-size:16px;font-weight:600;color:var(--t1);margin-bottom:12px;margin-top:1.5rem;}
+.fl-cb{font-size:11px;font-weight:400;color:var(--t3);background:#f0f4f9;border:.5px solid var(--border);border-radius:20px;padding:1px 8px;margin-left:8px;}
+/* Match card */
+.match-card{position:relative;border-radius:10px;overflow:hidden;border:2px solid var(--green);margin-bottom:8px;}
+.match-ob{position:absolute;top:5px;right:5px;background:rgba(29,158,117,.9);border-radius:10px;padding:2px 7px;font-size:9px;color:#fff;font-weight:600;}
+.match-cb{position:absolute;bottom:5px;left:5px;background:rgba(0,0,0,.6);border-radius:10px;padding:2px 7px;font-size:9px;color:#cef;}
+/* Share link */
+.share-link-box{background:#f8fafc;border:.5px solid #cbd5e1;border-radius:8px;padding:10px 14px;
+  font-family:monospace;font-size:12px;color:var(--t1);word-break:break-all;margin-bottom:12px;}
+/* Empty state */
+.fl-empty{text-align:center;padding:3rem 2rem;color:var(--t2);}
+.fl-empty-icon{font-size:48px;margin-bottom:12px;}
+.fl-empty-title{font-size:16px;font-weight:600;color:var(--t1);margin-bottom:6px;}
+.fl-empty-sub{font-size:13px;line-height:1.6;}
+/* Steps */
+.fl-steps{display:flex;align-items:center;gap:0;margin-bottom:1.5rem;flex-wrap:wrap;gap:4px;}
+.fl-step{display:flex;align-items:center;gap:8px;}
+.fl-step-num{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;}
+.fl-step-num.active{background:var(--blue);color:#fff;}
+.fl-step-num.done{background:var(--green);color:#fff;}
+.fl-step-num.idle{background:#e2e8f0;color:var(--t2);}
+.fl-step-label{font-size:12px;color:var(--t2);}
+.fl-step.active .fl-step-label{color:var(--t1);font-weight:500;}
+.fl-step-conn{width:24px;height:1px;background:#cbd5e1;margin:0 4px;}
+/* Inputs */
+.stTextInput>div>div>input,.stTextArea>div>div>textarea{border-radius:8px!important;border:.5px solid #cbd5e1!important;font-size:14px!important;}
+.stTextInput>div>div>input:focus{border-color:var(--blue)!important;box-shadow:0 0 0 2px var(--blue-dim)!important;}
+/* Tabs */
+.stTabs [data-baseweb="tab-list"]{gap:0;background:#f0f4f9;border-radius:8px;padding:3px;width:fit-content;}
+.stTabs [data-baseweb="tab"]{border-radius:6px;padding:.35rem 1rem;font-size:13px;font-weight:500;color:var(--t2);}
+.stTabs [aria-selected="true"]{background:var(--blue)!important;color:#fff!important;}
+.stTabs [data-baseweb="tab-border"]{display:none;}
+.stTabs [data-baseweb="tab-panel"]{padding-top:1.5rem;}
+/* Scrollbar */
+::-webkit-scrollbar{width:6px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px;}
+.stFileUploader>div{border-radius:10px!important;border:1.5px dashed #cbd5e1!important;}
 </style>
 """, unsafe_allow_html=True)
 
-# ─────────────────────────────────────────────────────────────────────────────
-# HTML COMPONENTS
-# ─────────────────────────────────────────────────────────────────────────────
-
-def brand_header():
-    st.markdown("""
-    <div style="
-        display: flex; align-items: center; gap: 14px;
-        padding: 1.5rem 0 1rem 0;
-        border-bottom: 1px solid #1E2A3A;
-        margin-bottom: 1.5rem;
-    ">
-        <div style="
-            width: 38px; height: 38px;
-            background: linear-gradient(135deg, #00E5FF, #0099BB);
-            border-radius: 10px;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 1.1rem;
-            box-shadow: 0 0 20px #00E5FF44;
-            flex-shrink: 0;
-        ">⬡</div>
-        <div>
-            <div style="
-                font-family: 'Syne', sans-serif;
-                font-weight: 800;
-                font-size: 1.1rem;
-                color: #F0F4FF;
-                letter-spacing: 0.02em;
-                line-height: 1.1;
-            ">FaceLinkAI</div>
-            <div style="
-                font-family: 'DM Mono', monospace;
-                font-size: 0.6rem;
-                color: #00E5FF;
-                letter-spacing: 0.15em;
-                text-transform: uppercase;
-                margin-top: 2px;
-            ">Studio Edition</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-def page_title(icon: str, title: str, subtitle: str = ""):
-    st.markdown(f"""
-    <div style="margin-bottom: 2rem;">
-        <div style="
-            display: flex; align-items: center; gap: 12px;
-            margin-bottom: 0.4rem;
-        ">
-            <span style="font-size: 1.6rem;">{icon}</span>
-            <h1 style="
-                font-family: 'Syne', sans-serif;
-                font-weight: 800;
-                font-size: 2rem;
-                color: #F0F4FF;
-                margin: 0;
-                letter-spacing: -0.02em;
-                line-height: 1;
-            ">{title}</h1>
-        </div>
-        {'<p style="font-family: DM Mono, monospace; font-size: 0.8rem; color: #8B9AB2; margin: 0; letter-spacing: 0.05em; padding-left: 52px;">' + subtitle + '</p>' if subtitle else ''}
-    </div>
-    """, unsafe_allow_html=True)
-
-def card(content_fn, padding="1.5rem", border_color="#1E2A3A", glow=False):
-    glow_style = "box-shadow: 0 0 20px #00E5FF22;" if glow else ""
-    st.markdown(f"""
-    <div style="
-        background: #111827;
-        border: 1px solid {border_color};
-        border-radius: 16px;
-        padding: {padding};
-        {glow_style}
-        margin-bottom: 0.75rem;
-    ">
-    """, unsafe_allow_html=True)
-    content_fn()
-    st.markdown("</div>", unsafe_allow_html=True)
-
-def album_card(album: dict, on_click_key: str = None):
-    is_active = album.get("is_active", False)
-    status_color = "#10B981" if is_active else "#4A5568"
-    status_text = "SHARING ON" if is_active else "SHARING OFF"
-    event_date = album.get("event_date", "No date") or "No date"
-    photos = album.get("total_photos", 0)
-    size_kb = round(album.get("total_size", 0) / 1024, 1)
-    album_id_short = str(album.get("id", ""))[:8]
-
-    st.markdown(f"""
-    <div style="
-        background: #111827;
-        border: 1px solid #1E2A3A;
-        border-radius: 16px;
-        padding: 1.25rem;
-        transition: all 0.2s;
-        cursor: pointer;
-        position: relative;
-        overflow: hidden;
-    " onmouseover="this.style.borderColor='#00E5FF44'; this.style.background='#161E2E';"
-      onmouseout="this.style.borderColor='#1E2A3A'; this.style.background='#111827';">
-        <div style="
-            position: absolute; top: 0; right: 0;
-            width: 80px; height: 80px;
-            background: radial-gradient(circle at top right, #00E5FF08, transparent);
-            border-radius: 0 16px 0 0;
-        "></div>
-        <div style="
-            display: flex; justify-content: space-between;
-            align-items: flex-start; margin-bottom: 0.75rem;
-        ">
-            <div style="
-                font-family: 'Syne', sans-serif;
-                font-weight: 700;
-                font-size: 1rem;
-                color: #F0F4FF;
-                line-height: 1.2;
-                max-width: 75%;
-            ">{album.get("album_name", "Untitled")}</div>
-            <div style="
-                background: {status_color}22;
-                color: {status_color};
-                border: 1px solid {status_color}44;
-                border-radius: 6px;
-                font-family: 'DM Mono', monospace;
-                font-size: 0.6rem;
-                letter-spacing: 0.1em;
-                padding: 3px 8px;
-                flex-shrink: 0;
-            ">{status_text}</div>
-        </div>
-        <div style="
-            display: flex; gap: 1.25rem;
-            font-family: 'DM Mono', monospace;
-            font-size: 0.72rem;
-        ">
-            <span style="color: #8B9AB2;">📅 {event_date}</span>
-            <span style="color: #00E5FF;">⬡ {photos} photos</span>
-            <span style="color: #8B9AB2;">💾 {size_kb} KB</span>
-        </div>
-        <div style="
-            margin-top: 0.6rem;
-            font-family: 'DM Mono', monospace;
-            font-size: 0.65rem;
-            color: #4A5568;
-        ">ID: {album_id_short}...</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-def stat_pill(label: str, value: str, color: str = "#00E5FF"):
-    st.markdown(f"""
-    <div style="
-        display: inline-flex; align-items: center; gap: 8px;
-        background: {color}11;
-        border: 1px solid {color}33;
-        border-radius: 100px;
-        padding: 6px 14px;
-        font-family: 'DM Mono', monospace;
-        font-size: 0.75rem;
-        color: {color};
-        margin: 3px;
-    ">
-        <span style="font-weight: 500;">{value}</span>
-        <span style="color: {color}88;">{label}</span>
-    </div>
-    """, unsafe_allow_html=True)
-
-def badge(text: str, color: str = "#00E5FF"):
-    st.markdown(f"""
-    <span style="
-        background: {color}22;
-        color: {color};
-        border: 1px solid {color}44;
-        border-radius: 6px;
-        font-family: 'DM Mono', monospace;
-        font-size: 0.65rem;
-        letter-spacing: 0.08em;
-        padding: 2px 8px;
-        text-transform: uppercase;
-    ">{text}</span>
-    """, unsafe_allow_html=True)
-
-def person_header(person_id: str, count: int, idx: int):
-    colors = ["#00E5FF", "#AAFF00", "#8B5CF6", "#FF6B35", "#F59E0B", "#10B981"]
-    color = colors[idx % len(colors)]
-    display = "Unknown / No Face" if person_id == "__no_face__" else f"Person #{idx+1}"
-    pid_short = person_id[:12] + "..." if len(person_id) > 12 else person_id
-
-    st.markdown(f"""
-    <div style="
-        display: flex; align-items: center; gap: 12px;
-        margin: 1.25rem 0 0.75rem 0;
-        padding: 0.75rem 1rem;
-        background: {color}0A;
-        border: 1px solid {color}22;
-        border-radius: 12px;
-    ">
-        <div style="
-            width: 36px; height: 36px;
-            background: linear-gradient(135deg, {color}, {color}88);
-            border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 1rem; flex-shrink: 0;
-        ">👤</div>
-        <div>
-            <div style="
-                font-family: 'Syne', sans-serif;
-                font-weight: 700; font-size: 0.95rem;
-                color: {color};
-            ">{display}</div>
-            <div style="
-                font-family: 'DM Mono', monospace;
-                font-size: 0.65rem;
-                color: #4A5568;
-                margin-top: 2px;
-            ">ID: {pid_short} · {count} photo{'s' if count != 1 else ''}</div>
-        </div>
-        <div style="margin-left: auto;">
-            <div style="
-                background: {color}22; border: 1px solid {color}44;
-                border-radius: 8px; padding: 4px 12px;
-                font-family: 'DM Mono', monospace;
-                font-size: 0.75rem; color: {color};
-                font-weight: 500;
-            ">{count} 📷</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-def upload_result_badge(filename: str, status: str, person_id: str = None, message: str = None):
-    config = {
-        "ok":      ("#10B981", "✓", "MATCHED"),
-        "no_face": ("#F59E0B", "◌", "NO FACE"),
-        "error":   ("#EF4444", "✕", "ERROR"),
-    }
-    color, icon, label = config.get(status, ("#8B9AB2", "?", "UNKNOWN"))
-    pid_str = f'<span style="color: #4A5568; font-size: 0.6rem;">→ {person_id[:8]}...</span>' if person_id else ""
-    msg_str = f'<span style="color: {color}88; font-size: 0.65rem; margin-left: 8px;">{message}</span>' if message else ""
-
-    st.markdown(f"""
-    <div style="
-        display: flex; align-items: center; gap: 10px;
-        padding: 8px 12px;
-        background: {color}0A;
-        border: 1px solid {color}22;
-        border-radius: 8px;
-        margin-bottom: 6px;
-    ">
-        <div style="
-            width: 24px; height: 24px;
-            background: {color}22; border-radius: 6px;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 0.75rem; color: {color};
-            flex-shrink: 0;
-        ">{icon}</div>
-        <div style="flex: 1; min-width: 0;">
-            <div style="
-                font-family: 'DM Mono', monospace; font-size: 0.78rem;
-                color: #F0F4FF; white-space: nowrap; overflow: hidden;
-                text-overflow: ellipsis;
-            ">{filename}</div>
-            <div style="display: flex; align-items: center; gap: 6px; margin-top: 2px;">
-                {pid_str}{msg_str}
-            </div>
-        </div>
-        <div style="
-            background: {color}22; color: {color};
-            border-radius: 4px; padding: 2px 8px;
-            font-family: 'DM Mono', monospace; font-size: 0.6rem;
-            letter-spacing: 0.1em; flex-shrink: 0;
-        ">{label}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-def nav_item(icon, label, page_key, current_page):
-    is_active = current_page == page_key
-    bg = "#00E5FF15" if is_active else "transparent"
-    color = "#00E5FF" if is_active else "#8B9AB2"
-    border = "1px solid #00E5FF33" if is_active else "1px solid transparent"
-    weight = "700" if is_active else "500"
-
-
-    st.session_state.page = page_key
-    st.rerun()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # SESSION STATE INIT
 # ─────────────────────────────────────────────────────────────────────────────
-def init_session():
-    defaults = {
-        "page": "login",
-        "token": None,
-        "user_id": None,
-        "studio_name": None,
-        "username": None,
-        "selected_album_id": None,
-        "base_url": BASE_URL,
-    }
-    for k, v in defaults.items():
-        if k not in st.session_state:
-            st.session_state[k] = v
+_DEFAULTS = {
+    "token": None,
+    "user_id": None,
+    "studio_name": None,
+    "username": None,
+    "page": "login",
+    "selected_album": None,
+    "share_link_pending": None,
+    "recog_results": None,
+    "recog_step": 1,
+    "selfie_file": None,
+    "create_album_open": False,
+    "upload_results": None,
+    "login_error": None,
+    "reg_error": None,
+    "reg_success": None,
+    "cl_login_error": None,
+    "cl_reg_error": None,
+}
+for _k, _v in _DEFAULTS.items():
+    if _k not in st.session_state:
+        st.session_state[_k] = _v
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# URL QUERY PARAM — share link via ?share=<token>
+# ─────────────────────────────────────────────────────────────────────────────
+_params = st.query_params
+if "share" in _params and not st.session_state.share_link_pending:
+    st.session_state.share_link_pending = _params["share"]
+    if not st.session_state.token:
+        st.session_state.page = "client_login"
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # API HELPERS
 # ─────────────────────────────────────────────────────────────────────────────
-def auth_headers():
+def _auth_headers():
     return {"Authorization": f"Bearer {st.session_state.token}"}
 
-def api_get(path: str, params: dict = None):
+
+def api_post(endpoint, json=None, files=None, data=None, auth=False):
+    headers = _auth_headers() if auth else {}
     try:
-        r = requests.get(f"{st.session_state.base_url}{path}",
-                         headers=auth_headers(), params=params, timeout=30)
-        return r
-    except requests.exceptions.ConnectionError:
-        st.error("⚡ Cannot connect to backend. Check BASE_URL setting.")
-        return None
+        r = requests.post(
+            f"{API_BASE}{endpoint}",
+            json=json, files=files, data=data,
+            headers=headers, timeout=180,
+        )
+        return r.json()
     except Exception as e:
-        st.error(f"Request failed: {e}")
-        return None
+        return {"error": str(e)}
 
-def api_post(path: str, json_data: dict = None, files=None, auth=True):
+
+def api_get(endpoint, auth=False, params=None):
+    headers = _auth_headers() if auth else {}
     try:
-        headers = auth_headers() if auth else {}
-        if files:
-            r = requests.post(f"{st.session_state.base_url}{path}",
-                              headers=headers, files=files, timeout=120)
-        else:
-            r = requests.post(f"{st.session_state.base_url}{path}",
-                              headers=headers, json=json_data, timeout=30)
-        return r
-    except requests.exceptions.ConnectionError:
-        st.error("⚡ Cannot connect to backend. Check BASE_URL setting.")
-        return None
+        r = requests.get(
+            f"{API_BASE}{endpoint}",
+            headers=headers, params=params, timeout=30,
+        )
+        return r.json()
     except Exception as e:
-        st.error(f"Request failed: {e}")
-        return None
+        return {"error": str(e)}
 
-def build_image_url(img_path: str) -> str:
-    base = st.session_state.base_url.rstrip("/")
-    path = img_path.lstrip("./").lstrip("/")
-    # Remove any existing 'images/' or 'data/images/' prefix first
-    if path.startswith("data/images/"):
-        path = path[len("data/images/"):]
-    elif path.startswith("images/"):
-        path = path[len("images/"):]
-    return f"{base}/images/{path}"
+
+def image_url(img_path: str) -> str:
+    return f"{IMAGE_BASE}/{img_path}"
+
+
+def fmt_size(b: int) -> str:
+    if not b:
+        return "0 B"
+    if b < 1024:
+        return f"{b} B"
+    if b < 1024 ** 2:
+        return f"{b/1024:.1f} KB"
+    return f"{b/1024**2:.1f} MB"
+
+
+def fmt_date(d) -> str:
+    if not d:
+        return "—"
+    try:
+        s = d if isinstance(d, str) else str(d)
+        return datetime.fromisoformat(s.split("T")[0]).strftime("%b %d, %Y")
+    except Exception:
+        return str(d)
+
+
+def nav(page, **kwargs):
+    st.session_state.page = page
+    for k, v in kwargs.items():
+        st.session_state[k] = v
+    st.rerun()
+
+
+def logout():
+    for k in ["token","user_id","studio_name","username","selected_album",
+              "recog_results","recog_step","upload_results","selfie_file"]:
+        st.session_state[k] = None
+    st.session_state.page = "login"
+    st.rerun()
+
+
+def _extract_error(resp: dict) -> Optional[str]:
+    if "error" in resp:
+        return f"Connection error: {resp['error']}"
+    detail = resp.get("detail", {})
+    if isinstance(detail, dict) and detail.get("status") is False:
+        return detail.get("message", "Something went wrong.")
+    if resp.get("status") is False:
+        return resp.get("message", "Something went wrong.")
+    return None
+
 
 # ─────────────────────────────────────────────────────────────────────────────
-# SIDEBAR
+# COMPONENT HELPERS
 # ─────────────────────────────────────────────────────────────────────────────
-def render_sidebar():
-    with st.sidebar:
-        brand_header()
+def alert_error(msg):
+    st.markdown(f'<div class="fl-err"><span>⚠ {msg}</span></div>', unsafe_allow_html=True)
 
-        if st.session_state.token:
-            st.markdown(f"""
-            <div style="
-                background: #111827;
-                border: 1px solid #1E2A3A;
-                border-radius: 12px;
-                padding: 1rem;
-                margin-bottom: 1.5rem;
-            ">
-                <div style="
-                    font-family: 'DM Mono', monospace;
-                    font-size: 0.65rem;
-                    color: #4A5568;
-                    text-transform: uppercase;
-                    letter-spacing: 0.1em;
-                    margin-bottom: 4px;
-                ">LOGGED IN AS</div>
-                <div style="
-                    font-family: 'Syne', sans-serif;
-                    font-weight: 700;
-                    font-size: 0.95rem;
-                    color: #00E5FF;
-                ">{st.session_state.studio_name or "Studio"}</div>
-                <div style="
-                    font-family: 'DM Mono', monospace;
-                    font-size: 0.7rem;
-                    color: #8B9AB2;
-                    margin-top: 2px;
-                ">@{st.session_state.username or ""}</div>
-            </div>
-            """, unsafe_allow_html=True)
+def alert_success(msg):
+    st.markdown(f'<div class="fl-ok"><span>✓ {msg}</span></div>', unsafe_allow_html=True)
 
-            st.markdown('<div style="margin-bottom: 0.5rem;"><span style="font-family: DM Mono, monospace; font-size: 0.65rem; color: #4A5568; text-transform: uppercase; letter-spacing: 0.12em;">NAVIGATION</span></div>', unsafe_allow_html=True)
+def alert_info(msg):
+    st.markdown(f'<div class="fl-info"><span>ℹ {msg}</span></div>', unsafe_allow_html=True)
 
-            nav_item("◈", "Dashboard", "dashboard", st.session_state.page)
-            nav_item("◫", "Albums", "albums", st.session_state.page)
-            nav_item("⬆", "Upload Photos", "upload", st.session_state.page)
-            nav_item("⬡", "Face Recognition", "recognition", st.session_state.page)
-            nav_item("⊞", "Gallery", "gallery", st.session_state.page)
-            nav_item("⌖", "Public Share", "public", st.session_state.page)
 
-            st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown('<hr style="border-color: #1E2A3A;">', unsafe_allow_html=True)
+def render_navbar(show_back=False, back_label="← Albums", back_page="dashboard"):
+    studio  = st.session_state.studio_name or "Studio"
+    initials = "".join(w[0].upper() for w in studio.split()[:2])
+    st.markdown(f"""
+    <div class="fl-nav">
+      <div class="fl-logo">
+        <div class="fl-logo-icon">🔗</div>
+        <span class="fl-logo-text">FaceLinkAI</span>
+      </div>
+      <div class="fl-nav-right">
+        <span class="fl-studio-name">{studio}</span>
+        <div class="fl-avatar">{initials}</div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-        
-            if st.button("⏻  Sign Out", key="logout_btn"):
-                for k in ["token", "user_id", "studio_name", "username", "selected_album_id"]:
-                    st.session_state[k] = None
-                st.session_state.page = "login"
-                st.rerun()
-        else:
-            st.markdown('<div style="margin-bottom: 0.5rem;"><span style="font-family: DM Mono, monospace; font-size: 0.65rem; color: #4A5568; text-transform: uppercase; letter-spacing: 0.12em;">ACCESS</span></div>', unsafe_allow_html=True)
-            nav_item("→", "Login", "login", st.session_state.page)
-            nav_item("+", "Register", "register", st.session_state.page)
-            nav_item("◉", "Public View", "public", st.session_state.page)
+    if show_back:
+        c1, _, c3 = st.columns([2, 7, 1])
+        with c1:
+            if st.button(back_label, key="nav_back_btn"):
+                nav(back_page)
+        with c3:
+            if st.button("Logout", key="nav_logout_b"):
+                logout()
+    else:
+        _, c3 = st.columns([11, 1])
+        with c3:
+            if st.button("Logout", key="nav_logout_m"):
+                logout()
 
-    
+
 # ─────────────────────────────────────────────────────────────────────────────
-# PAGE: LOGIN
+# PAGE: LOGIN / REGISTER
 # ─────────────────────────────────────────────────────────────────────────────
 def page_login():
-    col1, col2, col3 = st.columns([1, 1.4, 1])
-    with col2:
+    left_col, right_col = st.columns([2, 3])
+
+    with left_col:
         st.markdown("""
-        <div style="text-align: center; padding: 2rem 0 1.5rem 0;">
-            <div style="
-                width: 64px; height: 64px;
-                background: linear-gradient(135deg, #00E5FF, #0099BB);
-                border-radius: 18px;
-                display: flex; align-items: center; justify-content: center;
-                font-size: 2rem;
-                box-shadow: 0 0 30px #00E5FF44;
-                margin: 0 auto 1rem;
-            ">⬡</div>
-            <h1 style="
-                font-family: 'Syne', sans-serif;
-                font-weight: 800; font-size: 2.5rem;
-                color: #F0F4FF; margin: 0;
-                letter-spacing: -0.03em;
-            ">FaceLinkAI</h1>
-            <p style="
-                font-family: 'DM Mono', monospace;
-                font-size: 0.75rem; color: #00E5FF;
-                letter-spacing: 0.2em; text-transform: uppercase;
-                margin-top: 6px;
-            ">Studio Edition · Face Recognition Platform</p>
+        <div class="auth-left">
+          <div>
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:2.5rem">
+              <div style="width:36px;height:36px;background:#1a6dff;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px">🔗</div>
+              <span style="font-size:18px;font-weight:600;color:#fff">FaceLinkAI</span>
+            </div>
+          </div>
+          <div>
+            <div class="auth-badge"><span class="auth-badge-dot"></span> Studio Edition</div>
+            <div class="auth-tagline">
+              <h2>AI-powered photo recognition for photography studios</h2>
+              <p>Automatically detect faces, link clients to their photos, and share albums in seconds.</p>
+            </div>
+          </div>
+          <div style="font-size:11px;color:#445566">© 2025 FaceLinkAI. All rights reserved.</div>
         </div>
         """, unsafe_allow_html=True)
 
-        st.markdown("""
-        <div style="
-            background: #111827;
-            border: 1px solid #1E2A3A;
-            border-radius: 20px;
-            padding: 1rem;
-        ">
-        <h3 style="
-            font-family: 'Syne', sans-serif; font-weight: 700;
-            font-size: 1.2rem; color: #F0F4FF; justify-content: center;
-            margin-left:100px;
-        ">Log In to Studio</h3>
-        """, unsafe_allow_html=True)
+    with right_col:
+        st.markdown("<div style='padding:3rem 2rem;min-height:100vh;background:#f0f4f9;display:flex;flex-direction:column;justify-content:center'>", unsafe_allow_html=True)
 
-        mobile = st.text_input("Mobile Number", placeholder="+91 98765 43210", key="login_mobile")
-        password = st.text_input("Password", type="password", placeholder="••••••••", key="login_password")
+        tab_in, tab_reg = st.tabs(["Sign In", "Create Account"])
 
-        st.markdown("<div style='height: 0.5rem'></div>", unsafe_allow_html=True)
+        with tab_in:
+            _login_form()
 
-        if st.button("LOGIN →", key="login_btn"):
-            if not mobile or not password:
-                st.error("Please fill in all fields.")
-            else:
-                with st.spinner("Authenticating..."):
-                    r = api_post("/login-user", {"mobile_number": mobile, "password": password}, auth=False)
-                if r and r.status_code == 200:
-                    data = r.json()
-                    st.session_state.token = data["access_token"]
-                    st.session_state.user_id = data["user_id"]
-                    st.session_state.studio_name = data["studio_name"]
-                    st.session_state.username = data["username"]
-                    st.session_state.page = "dashboard"
-                    st.success("Welcome back!")
-                    time.sleep(0.5)
-                    st.rerun()
-                elif r:
-                    err = r.json().get("detail", "Login failed.")
-                    st.error(f"✕ {err}")
+        with tab_reg:
+            _register_form()
 
         st.markdown("</div>", unsafe_allow_html=True)
 
-        st.markdown("""
-        <p style="
-            text-align: center; margin-top: 1rem;
-            font-family: 'DM Mono', monospace; font-size: 0.75rem;
-            color: #4A5568;
-        ">No account? <span style="color: #00E5FF; cursor: pointer;">Register your studio</span></p>
-        """, unsafe_allow_html=True)
-        col_a, col_b = st.columns(2)
-        with col_b:
-            if st.button("Create Studio Account", key="goto_register"):
-                st.session_state.page = "register"
+
+def _login_form():
+    st.markdown("<div style='height:.5rem'></div>", unsafe_allow_html=True)
+    st.markdown("#### Welcome back")
+    st.markdown("<p style='font-size:13px;color:#5a6a7e;margin-top:-6px;margin-bottom:1rem'>Sign in to your studio account</p>", unsafe_allow_html=True)
+
+    if st.session_state.login_error:
+        alert_error(st.session_state.login_error)
+        st.session_state.login_error = None
+
+    mobile   = st.text_input("Mobile Number", placeholder="10-digit mobile number", key="li_mob")
+    password = st.text_input("Password", type="password", placeholder="Enter your password", key="li_pw")
+
+    if st.button("Sign In", key="btn_signin", use_container_width=True):
+        if not mobile or not password:
+            alert_error("Please fill in all fields.")
+        elif not mobile.isdigit() or len(mobile) != 10:
+            alert_error("Mobile number must be exactly 10 digits.")
+        else:
+            with st.spinner("Signing in..."):
+                resp = api_post("/login-user", json={"mobile_number": mobile, "password": password})
+            err = _extract_error(resp)
+            if err:
+                st.session_state.login_error = err
+                st.rerun()
+            else:
+                data = resp.get("data", resp)
+                st.session_state.token       = data.get("access_token")
+                st.session_state.user_id     = data.get("user_id")
+                st.session_state.studio_name = data.get("studio_name")
+                st.session_state.username    = data.get("username")
+                if st.session_state.share_link_pending:
+                    nav("client_gallery")
+                else:
+                    nav("dashboard")
+
+
+def _register_form():
+    st.markdown("<div style='height:.5rem'></div>", unsafe_allow_html=True)
+    st.markdown("#### Create your account")
+    st.markdown("<p style='font-size:13px;color:#5a6a7e;margin-top:-6px;margin-bottom:1rem'>Set up your photography studio</p>", unsafe_allow_html=True)
+
+    if st.session_state.reg_error:
+        alert_error(st.session_state.reg_error)
+        st.session_state.reg_error = None
+    if st.session_state.reg_success:
+        alert_success(st.session_state.reg_success)
+        st.session_state.reg_success = None
+
+    studio   = st.text_input("Studio Name", placeholder="e.g. Sharma Photography Studio", key="rg_studio")
+    username = st.text_input("Username", placeholder="e.g. sharma_studio", key="rg_user")
+    mob      = st.text_input("Mobile Number", placeholder="10-digit number", key="rg_mob")
+    c1, c2   = st.columns(2)
+    with c1:
+        email = st.text_input("Email (optional)", placeholder="studio@email.com", key="rg_email")
+    with c2:
+        pw = st.text_input("Password", type="password", placeholder="Min 8 chars", key="rg_pw")
+    cpw = st.text_input("Confirm Password", type="password", placeholder="Repeat password", key="rg_cpw")
+
+    if st.button("Create Studio Account", key="btn_reg", use_container_width=True):
+        errs = []
+        if not studio:   errs.append("Studio name required.")
+        if not username: errs.append("Username required.")
+        if not mob or not mob.isdigit() or len(mob) != 10:
+            errs.append("Mobile number must be 10 digits.")
+        if not pw or len(pw) < 8:
+            errs.append("Password min 8 characters.")
+        if pw != cpw:    errs.append("Passwords do not match.")
+        if errs:
+            st.session_state.reg_error = " | ".join(errs)
+            st.rerun()
+        else:
+            payload = {"studio_name": studio, "username": username,
+                       "mobile_number": mob, "password": pw}
+            if email:
+                payload["email"] = email
+            with st.spinner("Creating account..."):
+                resp = api_post("/register-user", json=payload)
+            err = _extract_error(resp)
+            if err:
+                st.session_state.reg_error = err
+                st.rerun()
+            else:
+                st.session_state.reg_success = "Account created! Please sign in."
                 st.rerun()
 
+
 # ─────────────────────────────────────────────────────────────────────────────
-# PAGE: REGISTER
+# PAGE: CLIENT LOGIN (share link flow)
 # ─────────────────────────────────────────────────────────────────────────────
-def page_register():
-    col1, col2, col3 = st.columns([1, 1.4, 1])
-    with col2:
+def page_client_login():
+    st.markdown("""
+    <div class="fl-nav">
+      <div class="fl-logo">
+        <div class="fl-logo-icon">🔗</div>
+        <span class="fl-logo-text">FaceLinkAI</span>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    _, center, _ = st.columns([2, 3, 2])
+    with center:
+        st.markdown("<div style='height:2rem'></div>", unsafe_allow_html=True)
+
         st.markdown("""
-        <div style="text-align: center; padding: 1.5rem 0 1rem 0;">
-            <h1 style="
-                font-family: 'Syne', sans-serif; font-weight: 800;
-                font-size: 2rem; color: #F0F4FF; margin: 0;
-            ">Create Studio</h1>
-            <p style="
-                font-family: 'DM Mono', monospace; font-size: 0.75rem;
-                color: #8B9AB2; margin-top: 6px;
-            ">Register your photography studio account</p>
+        <div class="fl-card-dark" style="display:flex;align-items:center;gap:14px">
+          <div style="width:44px;height:44px;background:#1a3a7a;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">📷</div>
+          <div>
+            <div style="font-size:15px;font-weight:600;color:#fff">Shared Album</div>
+            <div style="font-size:12px;color:#8899bb;margin-top:3px">Login required to view photos</div>
+          </div>
+          <div style="margin-left:auto;background:rgba(26,109,255,.2);border:.5px solid rgba(26,109,255,.4);
+               border-radius:20px;padding:4px 12px;font-size:11px;color:#5b9dff;white-space:nowrap;">
+            🔒 Login required
+          </div>
         </div>
-        <h3 style="
-            font-family: 'Syne', sans-serif; font-weight: 700;
-            font-size: 1.2rem; color: #F0F4FF; justify-content: center;
-            margin-left:110px;
-        ">Sign In to Studio</h3>
         """, unsafe_allow_html=True)
 
-       
-        
+        tab_in, tab_up = st.tabs(["Sign In", "Create Account"])
 
+        with tab_in:
+            if st.session_state.cl_login_error:
+                alert_error(st.session_state.cl_login_error)
+                st.session_state.cl_login_error = None
 
-        studio_name = st.text_input("Studio Name", placeholder="Pixel Perfect Studios", key="reg_studio")
-        col_a, col_b = st.columns(2)
-        with col_a:
-            username = st.text_input("Username", placeholder="pixelperfect", key="reg_username")
-        with col_b:
-            mobile = st.text_input("Mobile Number", placeholder="+91 98765 43210", key="reg_mobile")
-        email = st.text_input("Email (optional)", placeholder="studio@email.com", key="reg_email")
-        col_c, col_d = st.columns(2)
-        with col_c:
-            password = st.text_input("Password", type="password", placeholder="••••••••", key="reg_password")
-        with col_d:
-            confirm = st.text_input("Confirm Password", type="password", placeholder="••••••••", key="reg_confirm")
+            cl_mob = st.text_input("Mobile Number", placeholder="10-digit number", key="cl_mob")
+            cl_pw  = st.text_input("Password", type="password", key="cl_pw")
 
-        st.markdown("<div style='height: 0.5rem'></div>", unsafe_allow_html=True)
+            if st.button("Sign In & View Album", key="cl_btn_in", use_container_width=True):
+                if not cl_mob or not cl_pw:
+                    alert_error("Please fill all fields.")
+                elif not cl_mob.isdigit() or len(cl_mob) != 10:
+                    alert_error("Mobile number must be 10 digits.")
+                else:
+                    with st.spinner("Signing in..."):
+                        resp = api_post("/login-user", json={"mobile_number": cl_mob, "password": cl_pw})
+                    err = _extract_error(resp)
+                    if err:
+                        st.session_state.cl_login_error = err
+                        st.rerun()
+                    else:
+                        data = resp.get("data", resp)
+                        st.session_state.token       = data.get("access_token")
+                        st.session_state.user_id     = data.get("user_id")
+                        st.session_state.studio_name = data.get("studio_name")
+                        st.session_state.username    = data.get("username")
+                        nav("client_gallery")
 
-        if st.button("Create Studio Account →", key="register_btn"):
-            if not all([studio_name, username, mobile, password]):
-                st.error("Please fill in all required fields.")
-            elif password != confirm:
-                st.error("Passwords do not match.")
-            elif len(password) < 6:
-                st.error("Password must be at least 6 characters.")
-            else:
-                payload = {
-                    "studio_name": studio_name,
-                    "username": username,
-                    "mobile_number": mobile,
-                    "password": password,
-                }
-                if email:
-                    payload["email"] = email
-                with st.spinner("Creating studio account..."):
-                    r = api_post("/register-user", payload, auth=False)
-                if r and r.status_code == 201:
-                    st.success("✓ Studio account created! Please sign in.")
-                    time.sleep(1)
-                    st.session_state.page = "login"
+        with tab_up:
+            if st.session_state.cl_reg_error:
+                alert_error(st.session_state.cl_reg_error)
+                st.session_state.cl_reg_error = None
+
+            cl_rn  = st.text_input("Full Name / Studio", key="cl_rn")
+            cl_ru  = st.text_input("Username", key="cl_ru")
+            cl_rm  = st.text_input("Mobile Number", placeholder="10-digit", key="cl_rm")
+            cl_rpw = st.text_input("Password", type="password", key="cl_rpw")
+            cl_rcp = st.text_input("Confirm Password", type="password", key="cl_rcp")
+
+            if st.button("Create Account & View Album", key="cl_btn_reg", use_container_width=True):
+                errs = []
+                if not cl_rn:  errs.append("Name required.")
+                if not cl_ru:  errs.append("Username required.")
+                if not cl_rm or not cl_rm.isdigit() or len(cl_rm) != 10:
+                    errs.append("Mobile must be 10 digits.")
+                if not cl_rpw or len(cl_rpw) < 8:
+                    errs.append("Password min 8 chars.")
+                if cl_rpw != cl_rcp:
+                    errs.append("Passwords do not match.")
+                if errs:
+                    st.session_state.cl_reg_error = " | ".join(errs)
                     st.rerun()
-                elif r:
-                    err = r.json().get("detail", "Registration failed.")
-                    st.error(f"✕ {err}")
+                else:
+                    with st.spinner("Creating account..."):
+                        resp = api_post("/register-user", json={
+                            "studio_name": cl_rn, "username": cl_ru,
+                            "mobile_number": cl_rm, "password": cl_rpw,
+                        })
+                    err = _extract_error(resp)
+                    if err:
+                        st.session_state.cl_reg_error = err
+                        st.rerun()
+                    else:
+                        with st.spinner("Logging in..."):
+                            lr = api_post("/login-user", json={"mobile_number": cl_rm, "password": cl_rpw})
+                        data = lr.get("data", lr)
+                        st.session_state.token       = data.get("access_token")
+                        st.session_state.user_id     = data.get("user_id")
+                        st.session_state.studio_name = data.get("studio_name")
+                        st.session_state.username    = data.get("username")
+                        nav("client_gallery")
 
-        st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown("<div style='text-align:center;font-size:11px;color:#96a3b1;margin-top:12px'>After login, you'll be taken directly to your photos</div>", unsafe_allow_html=True)
 
-        col_a, col_b = st.columns(2)
-        with col_b:
-            if st.button("Back to Log In", key="goto_login"):
-                st.session_state.page = "login"
-                st.rerun()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PAGE: DASHBOARD
 # ─────────────────────────────────────────────────────────────────────────────
+_GRADIENTS = [
+    "linear-gradient(135deg,#0d2045,#1a3a7a)",
+    "linear-gradient(135deg,#0d3020,#1a5a3a)",
+    "linear-gradient(135deg,#2d0d40,#5a1a7a)",
+    "linear-gradient(135deg,#401500,#7a3a00)",
+    "linear-gradient(135deg,#00102d,#002d4a)",
+    "linear-gradient(135deg,#1a0030,#4a0050)",
+]
+
+
 def page_dashboard():
-    page_title("◈", f"Welcome, {st.session_state.studio_name or 'Studio'}", "Your AI-powered photo recognition platform")
+    render_navbar()
+    st.markdown('<div class="fl-page">', unsafe_allow_html=True)
 
-    with st.spinner("Loading studio data..."):
-        r = api_get("/get-albums")
-        albums = r.json() if r and r.status_code == 200 else []
-        r2 = api_get("/gallery")
-        gallery = r2.json() if r2 and r2.status_code == 200 else {}
+    with st.spinner("Loading albums..."):
+        albums = api_get("/get-albums", auth=True)
 
-    total_albums = len(albums)
-    total_photos = sum(a.get("total_photos", 0) for a in albums)
-    active_shares = sum(1 for a in albums if a.get("is_active"))
-    total_size_mb = round(sum(a.get("total_size", 0) for a in albums) / (1024*1024), 2)
+    if not isinstance(albums, list):
+        alert_error("Could not load albums. Please check your connection.")
+        albums = []
 
-    # Count unique persons
-    total_persons = 0
-    if gallery and "albums" in gallery:
-        person_ids = set()
-        for alb in gallery["albums"]:
-            for pg in alb.get("persons", []):
-                if pg["person_id"] != "__no_face__":
-                    person_ids.add(pg["person_id"])
-        total_persons = len(person_ids)
+    # Stats row
+    total_photos  = sum(a.get("total_photos", 0) for a in albums)
+    shared_count  = sum(1 for a in albums if a.get("is_active"))
+    total_size    = sum(a.get("total_size", 0) for a in albums)
 
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("Total Albums", total_albums)
-    with col2:
-        st.metric("Total Photos", total_photos)
-    with col3:
-        st.metric("Persons Indexed", total_persons)
-    with col4:
-        st.metric("Active Shares", active_shares)
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.markdown(f'<div class="stat-card"><div class="stat-label">Total Albums</div><div class="stat-val">{len(albums)}</div><div class="stat-hint">{shared_count} shared publicly</div></div>', unsafe_allow_html=True)
+    with c2:
+        st.markdown(f'<div class="stat-card"><div class="stat-label">Total Photos</div><div class="stat-val">{total_photos}</div><div class="stat-hint">Across all albums</div></div>', unsafe_allow_html=True)
+    with c3:
+        st.markdown(f'<div class="stat-card"><div class="stat-label">Storage Used</div><div class="stat-val">{fmt_size(total_size)}</div><div class="stat-hint">All uploaded photos</div></div>', unsafe_allow_html=True)
 
-    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("<div style='height:1.5rem'></div>", unsafe_allow_html=True)
 
-    col_l, col_r = st.columns([2, 1])
+    hc, bc = st.columns([5, 1])
+    with hc:
+        st.markdown('<div class="fl-sh">📂 Your Albums</div>', unsafe_allow_html=True)
+    with bc:
+        if st.button("＋ New Album", key="btn_new"):
+            st.session_state.create_album_open = not st.session_state.create_album_open
 
-    with col_l:
-        st.markdown("""
-        <h3 style="font-family: 'Syne', sans-serif; font-weight: 700;
-            font-size: 1rem; color: #8B9AB2; margin-bottom: 0.75rem;
-            text-transform: uppercase; letter-spacing: 0.1em;">
-            Recent Albums
-        </h3>""", unsafe_allow_html=True)
-        if albums:
-            for album in albums[:4]:
-                album_card(album)
-            if len(albums) > 4:
-                st.markdown(f'<p style="font-family: DM Mono, monospace; font-size: 0.75rem; color: #4A5568; text-align: center;">+{len(albums)-4} more albums</p>', unsafe_allow_html=True)
-        else:
-            st.markdown("""
-            <div style="
-                background: #111827; border: 1px dashed #1E2A3A;
-                border-radius: 16px; padding: 2.5rem;
-                text-align: center;
-            ">
-                <div style="font-size: 2rem; margin-bottom: 0.5rem;">◫</div>
-                <div style="font-family: 'Syne', sans-serif; font-weight: 600;
-                    color: #8B9AB2; font-size: 0.9rem;">No albums yet</div>
-                <div style="font-family: 'DM Mono', monospace; font-size: 0.75rem;
-                    color: #4A5568; margin-top: 4px;">Create your first album to get started</div>
-            </div>
-            """, unsafe_allow_html=True)
+    # Create album form
+    if st.session_state.create_album_open:
+        with st.expander("➕ Create New Album", expanded=True):
+            _create_album_form()
 
-    with col_r:
-        st.markdown("""
-        <h3 style="font-family: 'Syne', sans-serif; font-weight: 700;
-            font-size: 1rem; color: #8B9AB2; margin-bottom: 0.75rem;
-            text-transform: uppercase; letter-spacing: 0.1em;">
-            Quick Actions
-        </h3>""", unsafe_allow_html=True)
-        if st.button("＋  New Album", key="dash_new_album"):
-            st.session_state.page = "albums"
-            st.rerun()
-        st.markdown("<div style='height: 0.5rem'></div>", unsafe_allow_html=True)
-        if st.button("⬆  Upload Photos", key="dash_upload"):
-            st.session_state.page = "upload"
-            st.rerun()
-        st.markdown("<div style='height: 0.5rem'></div>", unsafe_allow_html=True)
-        if st.button("⬡  Face Recognition", key="dash_recog"):
-            st.session_state.page = "recognition"
-            st.rerun()
-        st.markdown("<div style='height: 0.5rem'></div>", unsafe_allow_html=True)
-        if st.button("⊞  View Gallery", key="dash_gallery"):
-            st.session_state.page = "gallery"
-            st.rerun()
-
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown("""
-        <div style="
-            background: #111827; border: 1px solid #00E5FF22;
-            border-radius: 12px; padding: 1rem;
-        ">
-            <div style="font-family: 'DM Mono', monospace; font-size: 0.65rem;
-                color: #4A5568; text-transform: uppercase; letter-spacing: 0.1em;
-                margin-bottom: 8px;">Storage Used</div>
-        """, unsafe_allow_html=True)
-        st.markdown(f'<div style="font-family: Syne, sans-serif; font-weight: 800; font-size: 1.5rem; color: #00E5FF;">{total_size_mb} MB</div>', unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-
-# ─────────────────────────────────────────────────────────────────────────────
-# PAGE: ALBUMS
-# ─────────────────────────────────────────────────────────────────────────────
-def page_albums():
-    page_title("◫", "Albums", "Manage event albums and sharing")
-
-    tab1, tab2 = st.tabs(["  All Albums  ", "  Create Album  "])
-
-    with tab1:
-        with st.spinner(""):
-            r = api_get("/get-albums")
-        if r and r.status_code == 200:
-            albums = r.json()
-            if not albums:
-                st.markdown("""
-                <div style="background: #111827; border: 1px dashed #1E2A3A; border-radius: 16px; padding: 3rem; text-align: center; margin-top: 1rem;">
-                    <div style="font-size: 2.5rem; margin-bottom: 0.75rem;">◫</div>
-                    <div style="font-family: 'Syne', sans-serif; font-weight: 700; color: #8B9AB2; font-size: 1.1rem;">No albums found</div>
-                    <div style="font-family: 'DM Mono', monospace; font-size: 0.75rem; color: #4A5568; margin-top: 6px;">Switch to "Create Album" to add your first event album.</div>
-                </div>
-                """, unsafe_allow_html=True)
-            else:
-                st.markdown(f'<p style="font-family: DM Mono, monospace; font-size: 0.75rem; color: #4A5568; margin-bottom: 1rem;">{len(albums)} album{"s" if len(albums) != 1 else ""} found</p>', unsafe_allow_html=True)
-                for album in albums:
-                    album_card(album)
-                    with st.expander(f"Manage: {album['album_name']}"):
-                        album_id = album["id"]
-                        col_a, col_b, col_c = st.columns(3)
-
-                        with col_a:
-                            if st.button("🔗 Gen Share Link", key=f"gen_{album_id}"):
-                                with st.spinner("Generating..."):
-                                    r2 = api_post(f"/album/{album_id}/generate-share-link")
-                                if r2 and r2.status_code == 200:
-                                    data = r2.json()
-                                    st.success("Share link generated!")
-                                    st.code(data["share_link"], language=None)
-                                elif r2:
-                                    st.error(r2.json().get("detail", "Failed"))
-
-                        with col_b:
-                            toggle_label = "⏸ Disable Sharing" if album.get("is_active") else "▶ Enable Sharing"
-                            if st.button(toggle_label, key=f"toggle_{album_id}"):
-                                with st.spinner("Toggling..."):
-                                    r3 = api_post(f"/album/{album_id}/toggle-share")
-                                if r3 and r3.status_code == 200:
-                                    data = r3.json()
-                                    new_state = "enabled" if data["is_active"] else "disabled"
-                                    st.success(f"Sharing {new_state}!")
-                                    st.rerun()
-                                elif r3:
-                                    st.error(r3.json().get("detail", "Failed"))
-
-                        with col_c:
-                            if st.button("⬆ Upload Photos", key=f"upload_{album_id}"):
-                                st.session_state.selected_album_id = album_id
-                                st.session_state.page = "upload"
-                                st.rerun()
-
-                        st.markdown(f"""
-                        <div style="margin-top: 0.5rem; padding: 0.75rem;
-                            background: #0E1420; border-radius: 8px;
-                            font-family: 'DM Mono', monospace; font-size: 0.72rem; ">
-                            <b style="color: #4A5568;">ID:</b> {album["id"]}<br>
-                            <b style="color: #4A5568;">Share Link:</b> <span style="color: #00E5FF;">{album.get("share_link", "N/A")}</span><br>
-                            <b style="color: #4A5568;">Created:</b> {album.get("created_at", "")[:10]}
-                        </div>
-                        """, unsafe_allow_html=True)
-        elif r:
-            st.error(f"Failed to load albums: {r.status_code}")
-
-    with tab2:
-        st.markdown('<div style="max-width: 520px;">', unsafe_allow_html=True)
-        st.markdown("""
-        <div style="background: #111827; border: 1px solid #1E2A3A; border-radius: 16px; padding: 1.75rem; margin-bottom: 1rem;">
-        <h3 style="font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1.1rem; color: #F0F4FF; margin: 0 0 1.25rem 0;">New Event Album</h3>
-        """, unsafe_allow_html=True)
-
-        album_name = st.text_input("Album Name", placeholder="Wedding – Sharma Family, 2025", key="new_album_name")
-        event_date = st.date_input("Event Date (optional)", value=None, key="new_album_date")
-
-        if st.button("Create Album →", key="create_album_btn"):
-            if not album_name:
-                st.error("Album name is required.")
-            else:
-                payload = {"album_name": album_name}
-                if event_date:
-                    payload["event_date"] = str(event_date)
-                with st.spinner("Creating album..."):
-                    r = api_post("/create-album", payload)
-                if r and r.status_code == 201:
-                    data = r.json()
-                    st.success(f"✓ Album '{data['album_name']}' created!")
-                    st.markdown(f"""
-                    <div style="background: #10B98111; border: 1px solid #10B98133; border-radius: 10px; padding: 0.75rem; font-family: 'DM Mono', monospace; font-size: 0.75rem; color: #10B981; margin-top: 0.5rem;">
-                        ✓ ID: {data["id"]}<br>
-                        ✓ Share Link: {data["share_link"]}
-                    </div>
-                    """, unsafe_allow_html=True)
-                elif r:
-                    st.error(r.json().get("detail", "Failed to create album."))
-
-        st.markdown("</div>", unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-
-# ─────────────────────────────────────────────────────────────────────────────
-# PAGE: UPLOAD
-# ─────────────────────────────────────────────────────────────────────────────
-def page_upload():
-    page_title("⬆", "Upload Photos", "Add photos to an album · AI face detection runs automatically")
-
-    with st.spinner(""):
-        r = api_get("/get-albums")
-    albums = r.json() if r and r.status_code == 200 else []
-
+    # Albums grid
     if not albums:
-        st.warning("No albums found. Create an album first.")
-        if st.button("Go to Albums"):
-            st.session_state.page = "albums"
+        st.markdown("""<div class="fl-empty"><div class="fl-empty-icon">📭</div>
+          <div class="fl-empty-title">No albums yet</div>
+          <div class="fl-empty-sub">Create your first album to start uploading event photos and detecting faces automatically.</div>
+        </div>""", unsafe_allow_html=True)
+    else:
+        cols = st.columns(3)
+        for i, album in enumerate(albums):
+            with cols[i % 3]:
+                _album_card(album)
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+
+def _create_album_form():
+    with st.form("form_create_album", clear_on_submit=True):
+        aname = st.text_input("Album Name *", placeholder="e.g. Kapoor Wedding 2025")
+        dc, tc = st.columns(2)
+        with dc:
+            edate = st.date_input("Event Date", value=date.today())
+        with tc:
+            st.selectbox("Event Type", ["Wedding","Corporate","Birthday","Portfolio","Other"])
+
+        s_col, x_col = st.columns(2)
+        with s_col:
+            submitted = st.form_submit_button("Create Album", use_container_width=True)
+        with x_col:
+            cancelled = st.form_submit_button("Cancel", use_container_width=True)
+
+        if cancelled:
+            st.session_state.create_album_open = False
             st.rerun()
+
+        if submitted:
+            if not aname:
+                alert_error("Album name is required.")
+            else:
+                with st.spinner("Creating..."):
+                    resp = api_post("/create-album",
+                                    json={"album_name": aname, "event_date": str(edate)},
+                                    auth=True)
+                if "id" in resp:
+                    alert_success(f"Album '{aname}' created!")
+                    st.session_state.create_album_open = False
+                    st.rerun()
+                else:
+                    err = _extract_error(resp)
+                    alert_error(err or "Failed to create album.")
+
+
+def _album_card(album):
+    aid      = album.get("id","")
+    name     = album.get("album_name","Untitled")
+    n_photos = album.get("total_photos", 0)
+    is_act   = album.get("is_active", False)
+    edate    = fmt_date(album.get("event_date"))
+    size     = fmt_size(album.get("total_size", 0))
+    grad     = _GRADIENTS[hash(aid) % len(_GRADIENTS)]
+    sdot_col = "#1d9e75" if is_act else "#ef9f27"
+    slabel   = "Sharing active" if is_act else "Sharing off"
+    shard_pill = '<div class="share-pill">Shared</div>' if is_act else ""
+    init     = "".join(w[0].upper() for w in name.split()[:2])
+
+    st.markdown(f"""
+    <div class="album-card">
+      <div class="album-thumb" style="background:{grad}">
+        {shard_pill}
+        <div class="album-badge">{n_photos} photos</div>
+        <span style="font-size:30px;opacity:.22">{init}</span>
+      </div>
+      <div class="album-info">
+        <div class="album-name">{name}</div>
+        <div class="album-meta">{edate} · {size}</div>
+        <div class="album-footer">
+          <span><span class="status-dot" style="background:{sdot_col}"></span>
+            <span style="font-size:11px;color:#5a6a7e">{slabel}</span></span>
+          <span class="chip">{n_photos} photos</span>
+        </div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    oc, sc = st.columns(2)
+    with oc:
+        if st.button("Open", key=f"open_{aid}", use_container_width=True):
+            nav("album_detail", selected_album=album)
+    with sc:
+        if st.button("Share", key=f"share_{aid}", use_container_width=True):
+            nav("share_settings", selected_album=album)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PAGE: ALBUM DETAIL
+# ─────────────────────────────────────────────────────────────────────────────
+def page_album_detail():
+    album = st.session_state.selected_album
+    if not album:
+        nav("dashboard")
         return
 
-    album_map = {a["album_name"]: a["id"] for a in albums}
-    default_idx = 0
-    if st.session_state.selected_album_id:
-        for i, a in enumerate(albums):
-            if str(a["id"]) == str(st.session_state.selected_album_id):
-                default_idx = i
-                break
+    render_navbar(show_back=True, back_label="← Albums", back_page="dashboard")
 
-    col_l, col_r = st.columns([1, 1.4])
+    aid    = album.get("id","")
+    name   = album.get("album_name","Album")
+    edate  = fmt_date(album.get("event_date"))
+    is_act = album.get("is_active", False)
+    scol   = "#1d9e75" if is_act else "#ef9f27"
+    slabel = "Sharing active" if is_act else "Sharing off"
 
-    with col_l:
-        st.markdown("""
-        <div style="background: #111827; border: 1px solid #1E2A3A; border-radius: 16px; padding: 1.5rem;">
-        <h3 style="font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1rem; color: #F0F4FF; margin: 0 0 1.25rem 0;">Upload Photos</h3>
+    st.markdown('<div class="fl-page">', unsafe_allow_html=True)
+
+    # Album header
+    st.markdown(f"""
+    <div class="fl-card-dark" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+      <div>
+        <div style="font-size:20px;font-weight:600;color:#fff">{name}</div>
+        <div style="display:flex;gap:14px;margin-top:6px;flex-wrap:wrap">
+          <span style="font-size:12px;color:#8899bb">📅 {edate}</span>
+          <span style="font-size:12px;color:#8899bb">🖼 {album.get('total_photos',0)} photos</span>
+          <span style="font-size:12px;color:#8899bb">💾 {fmt_size(album.get('total_size',0))}</span>
+          <span style="font-size:12px;color:{scol}">● {slabel}</span>
+        </div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    sh_col, _ = st.columns([2, 6])
+    with sh_col:
+        if st.button("⚙ Share Settings", key="det_share_btn"):
+            nav("share_settings", selected_album=album)
+
+    # Upload section
+    st.markdown('<div class="fl-sh" style="margin-top:1.5rem">☁ Upload Photos</div>', unsafe_allow_html=True)
+    st.markdown("""
+    <div class="upload-zone">
+      <div style="font-size:32px;margin-bottom:8px">📤</div>
+      <div style="font-size:15px;font-weight:600;color:#0d1b2a;margin-bottom:4px">Drag & drop photos here</div>
+      <div style="font-size:12px;color:#5a6a7e">JPG, PNG, WEBP, BMP, TIFF supported · AI face detection runs automatically</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    uploaded = st.file_uploader(
+        "Choose photos",
+        type=["jpg","jpeg","png","webp","bmp","tiff","tif"],
+        accept_multiple_files=True,
+        key=f"uploader_{aid}",
+        label_visibility="collapsed",
+    )
+
+    if uploaded:
+        if st.button(f"⬆ Upload {len(uploaded)} Photo(s) & Run AI", key="do_upload_btn", use_container_width=True):
+            _do_upload(aid, uploaded)
+
+    # Upload results
+    if st.session_state.upload_results:
+        _render_upload_results(st.session_state.upload_results)
+
+    # Photos gallery
+    _render_album_photos(aid)
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+
+def _do_upload(album_id, files):
+    total  = len(files)
+    pbar   = st.progress(0, text="Preparing upload...")
+    all_res = []
+
+    for i, uf in enumerate(files):
+        pbar.progress(i / total, text=f"📤 Uploading {uf.name} ({i+1}/{total}) — AI processing...")
+        fb = uf.read()
+        resp = api_post(
+            "/upload-album-photos",
+            files=[("files", (uf.name, fb, uf.type or "image/jpeg"))],
+            data={"album_id": album_id},
+            auth=True,
+        )
+        if "results" in resp:
+            all_res.extend(resp.get("results", []))
+        elif "error" in resp:
+            all_res.append({"filename": uf.name, "status": "error", "message": resp["error"]})
+        else:
+            err = _extract_error(resp)
+            if err:
+                all_res.append({"filename": uf.name, "status": "error", "message": err})
+
+    pbar.progress(1.0, text="✓ Upload complete!")
+    st.session_state.upload_results = all_res
+
+    # Refresh album
+    updated = api_get(f"/album/{album_id}", auth=True)
+    if "id" in updated:
+        st.session_state.selected_album = updated
+
+    st.rerun()
+
+
+def _render_upload_results(results):
+    ok_list  = [r for r in results if r.get("status") == "ok"]
+    nf_list  = [r for r in results if r.get("status") == "no_face"]
+    err_list = [r for r in results if r.get("status") == "error"]
+
+    if ok_list:
+        alert_success(f"{len(ok_list)} photo(s) processed with face detection.")
+    if nf_list:
+        alert_info(f"{len(nf_list)} photo(s) uploaded — no face detected in them.")
+    if err_list:
+        msgs = "; ".join(r.get("message","error") for r in err_list[:2])
+        alert_error(f"{len(err_list)} photo(s) failed: {msgs}")
+
+    if st.button("Clear", key="clr_res"):
+        st.session_state.upload_results = None
+        st.rerun()
+
+
+def _render_album_photos(album_id):
+    with st.spinner("Loading photos..."):
+        gal = api_get("/gallery", auth=True)
+
+    if "error" in gal:
+        alert_error("Could not load photos.")
+        return
+
+    target = next(
+        (a for a in gal.get("albums", []) if str(a.get("album_id")) == str(album_id)),
+        None,
+    )
+
+    if not target:
+        st.markdown("""<div class="fl-empty"><div class="fl-empty-icon">📭</div>
+          <div class="fl-empty-title">No photos yet</div>
+          <div class="fl-empty-sub">Upload photos above and AI will automatically detect faces.</div>
+        </div>""", unsafe_allow_html=True)
+        return
+
+    all_photos = []
+    for pg in target.get("persons", []):
+        all_photos.extend(pg.get("photos", []))
+
+    n = len(all_photos)
+    st.markdown(f'<div class="fl-sh">🖼 Photos<span class="fl-cb">{n} total</span></div>', unsafe_allow_html=True)
+
+    if not all_photos:
+        st.markdown('<div class="fl-empty"><div class="fl-empty-icon">📭</div><div class="fl-empty-title">No photos uploaded yet</div></div>', unsafe_allow_html=True)
+        return
+
+    per_row = 5
+    cols = st.columns(per_row)
+    for i, photo in enumerate(all_photos):
+        with cols[i % per_row]:
+            iurl = image_url(photo.get("img_path",""))
+            pid  = photo.get("person_id","") or ""
+            tag  = pid[:8] if pid else "No face"
+            st.markdown(f"""
+            <div class="photo-item">
+              <img src="{iurl}" style="width:100%;height:110px;object-fit:cover;border-radius:8px;display:block"
+                   onerror="this.style.background='#1a3060';this.style.minHeight='110px';this.removeAttribute('src')"/>
+              <div class="photo-person-tag">{tag}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PAGE: SHARE SETTINGS
+# ─────────────────────────────────────────────────────────────────────────────
+def page_share_settings():
+    album = st.session_state.selected_album
+    if not album:
+        nav("dashboard")
+        return
+
+    render_navbar(show_back=True, back_label="← Album", back_page="album_detail")
+
+    aid      = album.get("id","")
+    name     = album.get("album_name","Album")
+    is_act   = st.session_state.selected_album.get("is_active", False)
+    s_link   = st.session_state.selected_album.get("share_link","")
+
+    st.markdown('<div class="fl-page">', unsafe_allow_html=True)
+
+    _, mc, _ = st.columns([1, 3, 1])
+    with mc:
+        st.markdown(f"""
+        <div class="fl-card">
+          <div style="font-size:18px;font-weight:600;color:#0d1b2a;margin-bottom:4px">Share Album</div>
+          <div style="font-size:13px;color:#5a6a7e">{name}</div>
+        </div>
         """, unsafe_allow_html=True)
 
-        selected_name = st.selectbox("Select Album", list(album_map.keys()), index=default_idx, key="upload_album_select")
-        selected_album_id = album_map[selected_name]
-
-        uploaded_files = st.file_uploader(
-            "Drop photos here",
-            type=["jpg", "jpeg", "png", "webp"],
-            accept_multiple_files=True,
-            key="photo_uploader",
-            help="Supports JPG, PNG, WEBP. Multiple files allowed.",
-        )
-
-        if uploaded_files:
-            st.markdown(f"""
-            <div style="margin-top: 0.75rem; padding: 0.75rem;
-                background: #00E5FF0A; border: 1px solid #00E5FF22;
-                border-radius: 8px; font-family: 'DM Mono', monospace;
-                font-size: 0.75rem; color: #00E5FF;">
-                {len(uploaded_files)} file{'s' if len(uploaded_files) != 1 else ''} selected · Ready to upload
+        # Sharing status
+        act_label = "Active" if is_act else "Disabled"
+        act_color = "#1d9e75" if is_act else "#ef9f27"
+        st.markdown(f"""
+        <div style="background:#f8fafc;border:.5px solid #e2e8f0;border-radius:10px;padding:14px 16px;
+             display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+          <div>
+            <div style="font-size:14px;font-weight:500;color:#0d1b2a">Public Sharing</div>
+            <div style="font-size:11px;color:#5a6a7e;margin-top:2px">
+              Currently: <b style="color:{act_color}">{act_label}</b>
             </div>
-            """, unsafe_allow_html=True)
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
 
-        if st.button("⬆  Upload & Process", key="upload_btn"):
-            if not uploaded_files:
-                st.warning("Please select files first.")
-            else:
-                with col_r:
-                    st.markdown("""
-                    <h3 style="font-family: 'Syne', sans-serif; font-weight: 700;
-                        font-size: 1rem; color: #F0F4FF; margin: 0 0 1rem 0;">
-                        Upload Progress
-                    </h3>""", unsafe_allow_html=True)
-
-                    
-                    progress_bar = st.progress(0)
-                    status_container = st.empty()
-
-                    # single correct payload
-                    files_payload = [("files", (f.name, f.read(), f.type or "image/jpeg"))
-                      for f in uploaded_files]
-                    files_payload.append(("album_id", (None, str(selected_album_id))))
-                    
-
-                    data = {
-                        "album_id": str(selected_album_id)
+        tc, gc = st.columns(2)
+        with tc:
+            if st.button("Toggle Sharing On/Off", key="btn_toggle", use_container_width=True):
+                with st.spinner("Updating..."):
+                    resp = api_post("/album/toggle-share", json={"album_id": aid}, auth=True)
+                if "album_id" in resp:
+                    st.session_state.selected_album = {
+                            **st.session_state.selected_album,
+                        "is_active": resp.get("is_active"),
+                        "share_link": resp.get("share_link"),
                     }
+                    st.rerun()
+                else:
+                    alert_error(_extract_error(resp) or "Toggle failed.")
 
-                    status_container.markdown(
-                        '<div style="font-family: DM Mono, monospace; font-size: 0.8rem; color: #00E5FF;">⟳ Processing images through AI pipeline...</div>',
-                        unsafe_allow_html=True
-                    )
+        with gc:
+            if st.button("Generate New Link", key="btn_gen", use_container_width=True):
+                with st.spinner("Generating..."):
+                    resp = api_post("/album/generate-share-link", json={"album_id": aid}, auth=True)
+                if "share_link" in resp:
+                    st.session_state.selected_album = {
+                        **st.session_state.selected_album,
+                        "is_active": resp.get("is_active", True),
+                        "share_link": resp.get("share_link"),
+                    }
+                    alert_success("Share link generated!")
+                    st.rerun()
+                else:
+                    alert_error(_extract_error(resp) or "Failed to generate link.")
 
-                    progress_bar.progress(30)
-
-                    resp = api_post("/upload-album-photos", files=files_payload)
-                    progress_bar.progress(100)
-
-                    if resp and resp.status_code in [200, 201]:
-                        data = resp.json()
-                        results = data.get("results", [])
-                        ok = sum(1 for r_ in results if r_["status"] == "ok")
-                        no_face = sum(1 for r_ in results if r_["status"] == "no_face")
-                        errors = sum(1 for r_ in results if r_["status"] == "error")
-
-                        status_container.empty()
-                        st.markdown(f"""
-                        <div style="display: flex; gap: 0.75rem; margin: 0.75rem 0; flex-wrap: wrap;">
-                            <div style="background: #10B98111; border: 1px solid #10B98133; border-radius: 8px; padding: 8px 14px; font-family: DM Mono, monospace; font-size: 0.75rem; color: #10B981;">✓ {ok} matched</div>
-                            <div style="background: #F59E0B11; border: 1px solid #F59E0B33; border-radius: 8px; padding: 8px 14px; font-family: DM Mono, monospace; font-size: 0.75rem; color: #F59E0B;">◌ {no_face} no face</div>
-                            <div style="background: #EF444411; border: 1px solid #EF444433; border-radius: 8px; padding: 8px 14px; font-family: DM Mono, monospace; font-size: 0.75rem; color: #EF4444;">✕ {errors} errors</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-
-                        for res in results:
-                            upload_result_badge(
-                                res.get("filename", "unknown"),
-                                res.get("status", "error"),
-                                res.get("person_id"),
-                                res.get("message"),
-                            )
-                    elif resp:
-                            status_container.empty()
-                            st.error(f"Upload failed: {resp.status_code}")
-                            st.write(resp.text)
-
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    with col_r:
-        if st.session_state.get("photo_uploader") and uploaded_files:
-            pass  # results shown above when uploaded
-        else:
-            st.markdown("""
-            <div style="
-                background: #111827; border: 1px dashed #1E2A3A;
-                border-radius: 16px; padding: 3rem; text-align: center;
-                height: 100%; min-height: 300px;
-                display: flex; flex-direction: column;
-                align-items: center; justify-content: center;
-            ">
-                <div style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.3;">⬆</div>
-                <div style="font-family: 'Syne', sans-serif; font-weight: 600;
-                    color: #4A5568; font-size: 0.95rem;">Upload results appear here</div>
-                <div style="font-family: 'DM Mono', monospace; font-size: 0.7rem;
-                    color: #2D3748; margin-top: 6px; max-width: 240px; text-align: center;">
-                    Each photo is processed through RetinaFace + DeepFace Facenet512
-                </div>
+        # Show link
+        cur_link = st.session_state.selected_album.get("share_link") or s_link
+        if cur_link:
+            full_url = f"http://localhost:8501/?share={cur_link}"
+            st.markdown(f"""
+            <div style="margin-top:16px">
+              <div style="font-size:11px;font-weight:500;color:#5a6a7e;text-transform:uppercase;
+                   letter-spacing:.5px;margin-bottom:8px">Share Link</div>
+              <div class="share-link-box">🔗 {full_url}</div>
             </div>
             """, unsafe_allow_html=True)
+            st.code(full_url, language=None)
+            alert_info("Share this link with your clients. They'll need to sign in or create an account to view photos.")
+        else:
+            alert_info("No share link yet — click 'Generate New Link' to create one.")
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PAGE: CLIENT GALLERY
+# ─────────────────────────────────────────────────────────────────────────────
+def page_client_gallery():
+    share_token = st.session_state.share_link_pending
+    studio      = st.session_state.studio_name or "Client"
+    initials    = "".join(w[0].upper() for w in studio.split()[:2])
+
+    st.markdown(f"""
+    <div class="fl-nav">
+      <div class="fl-logo">
+        <div class="fl-logo-icon">🔗</div>
+        <span class="fl-logo-text">FaceLinkAI</span>
+      </div>
+      <div class="fl-nav-right">
+        <span class="fl-studio-name">{studio}</span>
+        <div class="fl-avatar">{initials}</div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if not share_token:
+        st.markdown('<div class="fl-page"><div class="fl-empty"><div class="fl-empty-icon">🔒</div><div class="fl-empty-title">No share token found</div></div></div>', unsafe_allow_html=True)
+        return
+
+    with st.spinner("Loading shared album..."):
+        resp = api_get(f"/album/share/{share_token}", auth=True)
+
+    if isinstance(resp, dict):
+        detail = resp.get("detail","")
+        if detail == "LOGIN_REQUIRED" or (isinstance(detail,dict) and not detail.get("status",True)):
+            nav("client_login")
+            return
+        if "error" in resp:
+            alert_error(f"Could not load album: {resp['error']}")
+            return
+
+    album_id   = resp.get("album_id","")
+    album_name = resp.get("album_name","Shared Album")
+    edate      = fmt_date(resp.get("event_date"))
+    photos     = resp.get("photos",[])
+    total      = resp.get("total_photos", len(photos))
+
+    st.markdown('<div class="fl-page">', unsafe_allow_html=True)
+
+    # Banner
+    st.markdown(f"""
+    <div class="fl-card-dark" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+      <div>
+        <div style="font-size:20px;font-weight:600;color:#fff">{album_name}</div>
+        <div style="font-size:12px;color:#8899bb;margin-top:4px">📅 {edate}</div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <span style="background:rgba(26,109,255,.2);border:.5px solid rgba(26,109,255,.35);
+               border-radius:20px;padding:3px 10px;font-size:11px;color:#5b9dff">📸 {total} photos</span>
+        </div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Action bar
+    fc, dc, lc = st.columns([2, 2, 1])
+    with fc:
+        if st.button("🔍 Find My Photos", key="cl_find", use_container_width=True):
+            st.session_state.recog_step    = 1
+            st.session_state.recog_results = None
+            st.session_state.selfie_file   = None
+            nav("face_recognition")
+    with dc:
+        if photos and st.button("⬇ Download All", key="cl_dl_all", use_container_width=True):
+            _bulk_download(photos)
+    with lc:
+        if st.button("Logout", key="cl_logout"):
+            logout()
+
+    # Photo grid
+    st.markdown(f'<div class="fl-sh">🖼 All Photos<span class="fl-cb">{total}</span></div>', unsafe_allow_html=True)
+
+    if not photos:
+        st.markdown("""<div class="fl-empty"><div class="fl-empty-icon">📭</div>
+          <div class="fl-empty-title">No photos in this album yet</div>
+        </div>""", unsafe_allow_html=True)
+    else:
+        per_row = 4
+        cols = st.columns(per_row)
+        for i, photo in enumerate(photos):
+            with cols[i % per_row]:
+                iurl = image_url(photo.get("img_path",""))
+                pid  = photo.get("person_id","") or ""
+                tag  = pid[:8] if pid else "No face"
+                st.markdown(f"""
+                <div class="photo-item">
+                  <img src="{iurl}" style="width:100%;height:130px;object-fit:cover;border-radius:8px;display:block"
+                       onerror="this.style.background='#1a3060';this.style.minHeight='130px';this.removeAttribute('src')"/>
+                  <div class="photo-person-tag">{tag}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+
+def _bulk_download(photos):
+    with st.spinner("Preparing ZIP..."):
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            for i, p in enumerate(photos):
+                url = image_url(p.get("img_path",""))
+                try:
+                    r = requests.get(url, timeout=15)
+                    if r.status_code == 200:
+                        ext = p.get("img_path","photo.jpg").rsplit(".",1)[-1]
+                        zf.writestr(f"photo_{i+1:04d}.{ext}", r.content)
+                except Exception:
+                    pass
+        buf.seek(0)
+    st.download_button(
+        label="💾 Click to Download ZIP",
+        data=buf,
+        file_name="album_photos.zip",
+        mime="application/zip",
+        key="zip_dl_btn",
+        use_container_width=True,
+    )
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PAGE: FACE RECOGNITION
 # ─────────────────────────────────────────────────────────────────────────────
-def page_recognition():
-    page_title("⬡", "Face Recognition", "Find all photos of a person across your studio albums")
+def page_face_recognition():
+    studio   = st.session_state.studio_name or "Client"
+    initials = "".join(w[0].upper() for w in studio.split()[:2])
+    st.markdown(f"""
+    <div class="fl-nav">
+      <div class="fl-logo">
+        <div class="fl-logo-icon">🔗</div>
+        <span class="fl-logo-text">FaceLinkAI</span>
+      </div>
+      <div class="fl-nav-right">
+        <span class="fl-studio-name">{studio}</span>
+        <div class="fl-avatar">{initials}</div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-    col_l, col_r = st.columns([1, 1.5])
+    st.markdown('<div class="fl-page">', unsafe_allow_html=True)
 
-    with col_l:
+    # Step indicator
+    step = st.session_state.recog_step
+    steps_data = [("1","Upload selfie"),("2","AI scanning"),("3","View results")]
+    html_steps = ""
+    for idx,(num,label) in enumerate(steps_data):
+        s   = int(num)
+        cls = "active" if s == step else ("done" if s < step else "idle")
+        html_steps += f'<div class="fl-step {cls}"><div class="fl-step-num {cls}">{num}</div><span class="fl-step-label">{label}</span></div>'
+        if idx < len(steps_data) - 1:
+            html_steps += '<div class="fl-step-conn"></div>'
+    st.markdown(f'<div class="fl-steps">{html_steps}</div>', unsafe_allow_html=True)
+
+    bc, _ = st.columns([2, 8])
+    with bc:
+        if st.button("← Back to Album", key="recog_back_nav"):
+            nav("client_gallery")
+
+    if step == 1:
+        _recog_upload()
+    elif step == 2:
+        _recog_scan()
+    elif step == 3:
+        _recog_results()
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+
+def _recog_upload():
+    _, cc, _ = st.columns([1, 3, 1])
+    with cc:
         st.markdown("""
-        <div style="background: #111827; border: 1px solid #1E2A3A; border-radius: 16px; padding: 1.5rem;">
-        <h3 style="font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1rem; color: #F0F4FF; margin: 0 0 1.25rem 0;">Query Face</h3>
-        """, unsafe_allow_html=True)
-
-        query_image = st.file_uploader(
-            "Upload a face photo",
-            type=["jpg", "jpeg", "png", "webp"],
-            key="recog_file",
-            help="Upload a clear frontal face photo for recognition"
-        )
-
-        if query_image:
-            st.image(query_image, width="stretch", caption="Query Image")
-
-        st.markdown("""
-        <div style="margin: 1rem 0; padding: 0.75rem; background: #8B5CF611; border: 1px solid #8B5CF622; border-radius: 8px; font-family: 'DM Mono', monospace; font-size: 0.7rem; color: #8B9AB2;">
-            ⬡ Uses FAISS IndexFlatIP with cosine similarity<br>
-            ⬡ Facenet512 · 512-dim embeddings<br>
-            ⬡ Threshold: 0.72 similarity score
+        <div style="text-align:center;margin-bottom:1.5rem">
+          <div style="font-size:22px;font-weight:600;color:#0d1b2a;margin-bottom:6px">Find Your Photos</div>
+          <div style="font-size:14px;color:#5a6a7e;line-height:1.6">Upload a clear selfie — AI will find all photos of you in this album</div>
+        </div>
+        <div class="upload-zone">
+          <div style="font-size:42px;margin-bottom:8px">🤳</div>
+          <div style="font-size:15px;font-weight:600;color:#0d1b2a;margin-bottom:4px">Upload your selfie</div>
+          <div style="font-size:12px;color:#5a6a7e">Clear, well-lit, solo photo · JPG or PNG</div>
         </div>
         """, unsafe_allow_html=True)
 
-        if st.button("⬡  Search Faces", key="recog_btn"):
-            if not query_image:
-                st.warning("Upload a face photo first.")
-            else:
-                with st.spinner("Running AI recognition pipeline..."):
-                    query_image.seek(0)
-                    files = [("file", (query_image.name, query_image.read(), query_image.type or "image/jpeg"))]
-                    resp = api_post("/recognize-face", files=files)
+        selfie = st.file_uploader("Choose selfie", type=["jpg","jpeg","png","webp"],
+                                   key="selfie_up", label_visibility="collapsed")
 
-                if resp and resp.status_code == 200:
-                    data = resp.json()
-                    st.session_state["recog_result"] = data
-                elif resp and resp.status_code == 422:
-                    st.error("No face detected in image. Use a clear frontal face photo.")
-                elif resp:
-                    st.error(resp.json().get("detail", "Recognition failed."))
+        if selfie:
+            st.image(selfie, width=160, caption="Your selfie — ready to scan")
 
-        st.markdown("</div>", unsafe_allow_html=True)
+        # Tips
+        t1, t2, t3 = st.columns(3)
+        for col, icon, title, hint in [
+            (t1,"☀️","Good lighting","Avoid shadows"),
+            (t2,"🎯","Face centered","Look at camera"),
+            (t3,"🖼","Solo photo","Only your face"),
+        ]:
+            with col:
+                st.markdown(f'<div class="fl-card" style="text-align:center;padding:10px"><div style="font-size:18px">{icon}</div><div style="font-size:12px;font-weight:500;color:#0d1b2a;margin-top:4px">{title}</div><div style="font-size:10px;color:#96a3b1">{hint}</div></div>', unsafe_allow_html=True)
 
-    with col_r:
-        if "recog_result" in st.session_state and st.session_state["recog_result"]:
-            data = st.session_state["recog_result"]
-            person_id = data.get("person_id")
-            is_new = data.get("is_new_person", True)
-            score = data.get("similarity_score")
-            matched = data.get("matched_photos", [])
+        if selfie:
+            if st.button("🔍 Scan & Find My Photos", key="btn_scan", use_container_width=True):
+                st.session_state.selfie_file = selfie
+                st.session_state.recog_step  = 2
+                st.rerun()
 
-            if is_new or not person_id:
-                st.markdown("""
-                <div style="background: #F59E0B11; border: 1px solid #F59E0B33; border-radius: 12px; padding: 1.5rem; text-align: center; margin-bottom: 1rem;">
-                    <div style="font-size: 2rem;">◌</div>
-                    <div style="font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1rem; color: #F59E0B; margin-top: 0.5rem;">New Person / No Match</div>
-                    <div style="font-family: 'DM Mono', monospace; font-size: 0.75rem; color: #8B9AB2; margin-top: 4px;">This face has not been seen before in your albums.</div>
-                </div>
-                """, unsafe_allow_html=True)
-            else:
-                score_color = "#10B981" if score and score > 0.85 else "#F59E0B" if score and score > 0.72 else "#EF4444"
-                st.markdown(f"""
-                <div style="background: #10B98111; border: 1px solid #10B98133; border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <div style="font-family: 'DM Mono', monospace; font-size: 0.65rem; color: #4A5568; text-transform: uppercase; letter-spacing: 0.1em;">Matched Person</div>
-                            <div style="font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.9rem; color: #10B981; margin-top: 2px;">{person_id[:20]}...</div>
-                        </div>
-                        <div style="text-align: right;">
-                            <div style="font-family: 'DM Mono', monospace; font-size: 0.65rem; color: #4A5568; text-transform: uppercase; letter-spacing: 0.1em;">Similarity</div>
-                            <div style="font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1.5rem; color: {score_color};">{score:.3f}</div>
-                        </div>
-                    </div>
-                    <div style="font-family: 'DM Mono', monospace; font-size: 0.7rem; color: #4A5568; margin-top: 0.5rem;">
-                        {len(matched)} matching photo{'s' if len(matched) != 1 else ''} found across your albums
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
 
-            if matched:
-                st.markdown('<h3 style="font-family: Syne, sans-serif; font-weight: 700; font-size: 0.9rem; color: #8B9AB2; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.75rem;">Matched Photos</h3>', unsafe_allow_html=True)
-                cols = st.columns(3)
-                for i, photo in enumerate(matched):
-                    with cols[i % 3]:
-                        img_url = build_image_url(photo["img_path"])
-                        st.markdown(f"""
-                        <div style="background: #111827; border: 1px solid #1E2A3A; border-radius: 10px; overflow: hidden; margin-bottom: 0.5rem;">
-                            <img src="{img_url}" style="width: 100%; aspect-ratio: 1; object-fit: cover; display: block;"
-                                 onerror="this.style.display='none'; this.nextSibling.style.display='flex';">
-                            <div style="display: none; width: 100%; aspect-ratio: 1; background: #0E1420; align-items: center; justify-content: center; font-size: 1.5rem;">🖼</div>
-                            <div style="padding: 0.5rem;">
-                                <div style="font-family: 'DM Mono', monospace; font-size: 0.65rem; color: #00E5FF; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{photo.get('album_name', 'Album')}</div>
-                                <div style="font-family: 'DM Mono', monospace; font-size: 0.6rem; color: #4A5568; margin-top: 2px;">sim: {photo.get('similarity', 0):.3f}</div>
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
-        else:
-            st.markdown("""
-            <div style="
-                background: #111827; border: 1px dashed #1E2A3A;
-                border-radius: 16px; padding: 4rem; text-align: center;
-                min-height: 400px; display: flex; flex-direction: column;
-                align-items: center; justify-content: center;
-            ">
-                <div style="
-                    width: 80px; height: 80px;
-                    background: #8B5CF611; border: 1px solid #8B5CF622;
-                    border-radius: 50%; display: flex; align-items: center;
-                    justify-content: center; font-size: 2.5rem; margin-bottom: 1.25rem;
-                ">⬡</div>
-                <div style="font-family: 'Syne', sans-serif; font-weight: 700; color: #4A5568; font-size: 1rem;">No search yet</div>
-                <div style="font-family: 'DM Mono', monospace; font-size: 0.72rem; color: #2D3748; margin-top: 6px; max-width: 260px; text-align: center;">
-                    Upload a face photo on the left and run a search to find all matching photos in your studio
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+def _recog_scan():
+    _, cc, _ = st.columns([1, 3, 1])
+    with cc:
+        st.markdown("""
+        <div style="text-align:center;margin-bottom:1.5rem">
+          <div style="font-size:22px;font-weight:600;color:#0d1b2a">Scanning for matches...</div>
+          <div style="font-size:14px;color:#5a6a7e;margin-top:6px">AI is analysing your selfie against all album photos</div>
+        </div>
+        """, unsafe_allow_html=True)
 
-# ─────────────────────────────────────────────────────────────────────────────
-# PAGE: GALLERY
-# ─────────────────────────────────────────────────────────────────────────────
-def page_gallery():
-    page_title("⊞", "Gallery", "Photos organized by album and recognized person")
-
-    with st.spinner("Loading gallery..."):
-        r = api_get("/gallery")
-
-    if not r or r.status_code != 200:
-        st.error("Failed to load gallery.")
+    selfie = st.session_state.get("selfie_file")
+    if not selfie:
+        st.session_state.recog_step = 1
+        st.rerun()
         return
 
-    data = r.json()
-    albums = data.get("albums", [])
-
-    if not albums:
-        st.markdown("""
-        <div style="background: #111827; border: 1px dashed #1E2A3A; border-radius: 16px; padding: 3rem; text-align: center;">
-            <div style="font-size: 2.5rem; margin-bottom: 0.75rem; opacity: 0.3;">⊞</div>
-            <div style="font-family: 'Syne', sans-serif; font-weight: 700; color: #8B9AB2; font-size: 1rem;">Gallery is empty</div>
-            <div style="font-family: 'DM Mono', monospace; font-size: 0.75rem; color: #4A5568; margin-top: 6px;">Upload photos to your albums to populate the gallery.</div>
-        </div>
-        """, unsafe_allow_html=True)
-        return
-
-    # Album selector
-    album_names = [a["album_name"] for a in albums]
-    selected = st.selectbox("Filter by Album", ["All Albums"] + album_names, key="gallery_album_filter")
-    filtered_albums = albums if selected == "All Albums" else [a for a in albums if a["album_name"] == selected]
-
-    for album in filtered_albums:
-        persons = album.get("persons", [])
-        total_photos = sum(p["total_photos"] for p in persons)
-        person_count = sum(1 for p in persons if p["person_id"] != "__no_face__")
-
-        st.markdown(f"""
-        <div style="
-            background: #111827; border: 1px solid #1E2A3A; border-radius: 16px;
-            padding: 1.25rem 1.5rem; margin-bottom: 0.5rem;
-            display: flex; align-items: center; gap: 16px;
-        ">
-            <div style="
-                width: 44px; height: 44px;
-                background: linear-gradient(135deg, #00E5FF22, #00E5FF08);
-                border: 1px solid #00E5FF33; border-radius: 12px;
-                display: flex; align-items: center; justify-content: center;
-                font-size: 1.3rem; flex-shrink: 0;
-            ">◫</div>
-            <div style="flex: 1;">
-                <div style="font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1rem; color: #F0F4FF;">{album["album_name"]}</div>
-                <div style="font-family: 'DM Mono', monospace; font-size: 0.7rem; color: #4A5568; margin-top: 2px;">
-                    {person_count} person{'s' if person_count != 1 else ''} · {total_photos} photo{'s' if total_photos != 1 else ''}
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        for idx, person_group in enumerate(persons):
-            pid = person_group["person_id"]
-            count = person_group["total_photos"]
-            photos = person_group["photos"]
-
-            with st.expander(f"{'Unknown' if pid == '__no_face__' else f'Person #{idx+1}'}  ·  {count} photos", expanded=(idx == 0)):
-                person_header(pid, count, idx)
-                if photos:
-                    grid_cols = st.columns(4)
-                    for i, photo in enumerate(photos):
-                        with grid_cols[i % 4]:
-                            img_url = build_image_url(photo["img_path"])
-                            uploaded = photo.get("uploaded_at", "")[:10]
-                            st.markdown(f"""
-                            <div style="
-                                background: #0E1420; border: 1px solid #1E2A3A;
-                                border-radius: 10px; overflow: hidden; margin-bottom: 0.5rem;
-                                transition: border-color 0.2s;
-                            " onmouseover="this.style.borderColor='#00E5FF44'"
-                              onmouseout="this.style.borderColor='#1E2A3A'">
-                                <img src="{img_url}" style="width: 100%; aspect-ratio: 1; object-fit: cover; display: block;"
-                                     onerror="this.style.display='none'; this.nextSibling.style.display='flex';">
-                                <div style="display:none; width:100%; aspect-ratio:1; background:#080B12; align-items:center; justify-content:center; font-size:1.5rem; color:#1E2A3A;">🖼</div>
-                                <div style="padding: 6px 8px;">
-                                    <div style="font-family: 'DM Mono', monospace; font-size: 0.6rem; color: #4A5568;">{uploaded}</div>
-                                </div>
-                            </div>
-                            """, unsafe_allow_html=True)
-
-        st.markdown("<br>", unsafe_allow_html=True)
-
-# ─────────────────────────────────────────────────────────────────────────────
-# PAGE: PUBLIC SHARE VIEW
-# ─────────────────────────────────────────────────────────────────────────────
-def page_public():
-    page_title("◉", "Public Album", "View a shared album without logging in")
-
-    col_l, col_r = st.columns([1, 2])
-
-    with col_l:
-        st.markdown("""
-        <div style="background: #111827; border: 1px solid #1E2A3A; border-radius: 16px; padding: 1.5rem;">
-        <h3 style="font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1rem; color: #F0F4FF; margin: 0 0 1.25rem 0;">Enter Share Link</h3>
-        """, unsafe_allow_html=True)
-
-        share_link = st.text_input("Share Link Token", placeholder="abc123def456...", key="pub_share_link")
-
-        if st.button("View Album →", key="pub_view_btn"):
-            if not share_link.strip():
-                st.warning("Enter a share link token.")
-            else:
-                with st.spinner("Loading album..."):
-                    try:
-                        r = requests.get(f"{st.session_state.base_url}/album/share/{share_link.strip()}", timeout=15)
-                        if r.status_code == 200:
-                            st.session_state["pub_album_data"] = r.json()
-                        elif r.status_code == 404:
-                            st.error("Share link not found or sharing is disabled.")
-                            st.session_state["pub_album_data"] = None
-                        else:
-                            st.error(f"Error: {r.json().get('detail', 'Unknown')}")
-                            st.session_state["pub_album_data"] = None
-                    except Exception as e:
-                        st.error(f"Connection error: {e}")
-
-        st.markdown("</div>", unsafe_allow_html=True)
-
-        st.markdown("""
-        <div style="margin-top: 1rem; padding: 1rem; background: #111827; border: 1px solid #1E2A3A; border-radius: 12px;">
-            <div style="font-family: 'DM Mono', monospace; font-size: 0.65rem; color: #4A5568; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px;">How it works</div>
-            <div style="font-family: 'DM Mono', monospace; font-size: 0.72rem; color: #8B9AB2; line-height: 1.6;">
-                ① Studio generates a share link<br>
-                ② Guest receives the token<br>
-                ③ Anyone can view without login<br>
-                ④ Studio can disable anytime
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with col_r:
-        if "pub_album_data" in st.session_state and st.session_state["pub_album_data"]:
-            data = st.session_state["pub_album_data"]
-            photos = data.get("photos", [])
-
-            st.markdown(f"""
-            <div style="background: #111827; border: 1px solid #00E5FF22; border-radius: 16px; padding: 1.5rem; margin-bottom: 1.25rem; box-shadow: 0 0 20px #00E5FF11;">
-                <div style="font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1.4rem; color: #F0F4FF; margin-bottom: 4px;">{data.get("album_name", "Album")}</div>
-                <div style="display: flex; gap: 1rem; font-family: 'DM Mono', monospace; font-size: 0.72rem; color: #8B9AB2;">
-                    <span>📅 {data.get("event_date", "No date") or "No date"}</span>
-                    <span style="color: #00E5FF;">⬡ {data.get("total_photos", 0)} photos</span>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-            if photos:
-                st.markdown(f'<p style="font-family: DM Mono, monospace; font-size: 0.72rem; color: #4A5568; margin-bottom: 0.75rem;">{len(photos)} photos in this album</p>', unsafe_allow_html=True)
-                grid_cols = st.columns(4)
-                for i, photo in enumerate(photos):
-                    with grid_cols[i % 4]:
-                        img_url = build_image_url(photo["img_path"])
-                        person_label = f"Person {photo['person_id'][:6]}..." if photo.get("person_id") and photo["person_id"] != "__no_face__" else "No face"
-                        st.markdown(f"""
-                        <div style="
-                            background: #0E1420; border: 1px solid #1E2A3A;
-                            border-radius: 10px; overflow: hidden; margin-bottom: 0.5rem;
-                        ">
-                            <img src="{img_url}" style="width: 100%; aspect-ratio: 1; object-fit: cover; display: block;"
-                                 onerror="this.style.display='none'; this.nextSibling.style.display='flex';">
-                            <div style="display:none; width:100%; aspect-ratio:1; background:#080B12; align-items:center; justify-content:center; font-size:1.5rem; color:#1E2A3A;">🖼</div>
-                            <div style="padding: 6px 8px;">
-                                <div style="font-family: 'DM Mono', monospace; font-size: 0.6rem; color: #4A5568; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{person_label}</div>
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
-            else:
-                st.info("This album has no photos yet.")
-        else:
-            st.markdown("""
-            <div style="
-                background: #111827; border: 1px dashed #1E2A3A;
-                border-radius: 16px; padding: 4rem; text-align: center;
-                min-height: 350px; display: flex; flex-direction: column;
-                align-items: center; justify-content: center;
-            ">
-                <div style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.2;">◉</div>
-                <div style="font-family: 'Syne', sans-serif; font-weight: 700; color: #4A5568; font-size: 1rem;">Enter a share link</div>
-                <div style="font-family: 'DM Mono', monospace; font-size: 0.72rem; color: #2D3748; margin-top: 6px; max-width: 240px; text-align: center;">
-                    Paste the share token from a studio to view their album publicly
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-# ─────────────────────────────────────────────────────────────────────────────
-# AUTH GUARD
-# ─────────────────────────────────────────────────────────────────────────────
-def require_auth():
-    if not st.session_state.token:
-        st.markdown("""
-        <div style="
-            background: #EF444411; border: 1px solid #EF444433;
-            border-radius: 12px; padding: 1.5rem; text-align: center;
-            margin: 2rem 0;
-        ">
-            <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🔒</div>
-            <div style="font-family: 'Syne', sans-serif; font-weight: 700; color: #EF4444; font-size: 1rem;">Authentication Required</div>
-            <div style="font-family: 'DM Mono', monospace; font-size: 0.75rem; color: #8B9AB2; margin-top: 6px;">Please sign in to access this page.</div>
-        </div>
-        """, unsafe_allow_html=True)
-        if st.button("Go to Login"):
-            st.session_state.page = "login"
+    with st.spinner("🤖 Running face recognition AI... this may take a moment."):
+        try:
+            fb = selfie.read() if hasattr(selfie, "read") else selfie.getvalue()
+        except Exception:
+            alert_error("Could not read selfie file.")
+            st.session_state.recog_step = 1
             st.rerun()
-        return False
-    return True
+            return
+
+        resp = api_post("/recognize-face",
+                        files=[("file", (selfie.name, fb, selfie.type or "image/jpeg"))],
+                        auth=True)
+
+    err = _extract_error(resp)
+    if err:
+        alert_error(err)
+        if st.button("Try Again", key="scan_retry"):
+            st.session_state.recog_step = 1
+            st.rerun()
+        return
+
+    st.session_state.recog_results = resp
+    st.session_state.recog_step    = 3
+    st.rerun()
+
+
+def _recog_results():
+    res = st.session_state.recog_results
+    if not res:
+        st.session_state.recog_step = 1
+        st.rerun()
+        return
+
+    matched    = res.get("matched_photos", [])
+    person_id  = res.get("person_id")
+    sim        = res.get("similarity_score")
+    is_new     = res.get("is_new_person", True)
+    n_matches  = len(matched)
+
+    _, cc, _ = st.columns([1, 4, 1])
+    with cc:
+        sim_txt = f"{sim:.0%} confidence" if sim else "Scanned all photos"
+        st.markdown(f"""
+        <div class="fl-card-dark" style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+          <div style="width:52px;height:52px;border-radius:50%;background:#1a3a7a;border:2px solid #1a6dff;
+               display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0">🤳</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:16px;font-weight:600;color:#fff">Your face match results</div>
+            <div style="font-size:12px;color:#8899bb;margin-top:3px">{sim_txt}</div>
+          </div>
+          <div style="background:rgba(29,158,117,.2);border:.5px solid rgba(29,158,117,.4);
+               border-radius:12px;padding:8px 16px;text-align:center;flex-shrink:0">
+            <div style="font-size:22px;font-weight:600;color:#5dcaa5">{n_matches}</div>
+            <div style="font-size:10px;color:#5dcaa5">photos found</div>
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # No matches
+    if is_new or n_matches == 0:
+        st.markdown("""<div class="fl-empty">
+          <div class="fl-empty-icon">😔</div>
+          <div class="fl-empty-title">No matching photos found</div>
+          <div class="fl-empty-sub">Try a different photo with better lighting and a clear, direct view of your face.</div>
+        </div>""", unsafe_allow_html=True)
+        ra, rb = st.columns(2)
+        with ra:
+            if st.button("Try Another Photo", key="retry_photo", use_container_width=True):
+                st.session_state.recog_step    = 1
+                st.session_state.recog_results = None
+                st.session_state.selfie_file   = None
+                st.rerun()
+        with rb:
+            if st.button("← Back to Album", key="back_from_no_match", use_container_width=True):
+                nav("client_gallery")
+        return
+
+    # Scanning steps done banner
+    st.markdown(f"""
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:1rem;flex-wrap:wrap">
+      {"".join([f'<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#1d9e75"><span style="width:16px;height:16px;border-radius:50%;background:#1d9e75;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:9px">✓</span>{s}</span><span style="width:14px;height:1px;background:#cbd5e1;display:inline-block"></span>' for s in ["Face detected","Embedding generated",f"{n_matches} matches found"]][:-1])}
+      <span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#1d9e75"><span style="width:16px;height:16px;border-radius:50%;background:#1d9e75;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:9px">✓</span>{n_matches} matches found</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Matched photos grid
+    per_row = 4
+    cols    = st.columns(per_row)
+    for i, photo in enumerate(matched):
+        with cols[i % per_row]:
+            iurl  = image_url(photo.get("img_path",""))
+            sim_p = f"{photo.get('similarity',0)*100:.0f}%"
+            aname = photo.get("album_name","")
+            st.markdown(f"""
+            <div class="match-card">
+              <img src="{iurl}" style="width:100%;height:130px;object-fit:cover;display:block"
+                   onerror="this.style.background='#1a3060';this.style.minHeight='130px';this.removeAttribute('src')"/>
+              <div class="match-ob">Match</div>
+              <div class="match-cb">{sim_p}</div>
+            </div>
+            <div style="font-size:10px;color:#5a6a7e;margin-bottom:8px">{aname}</div>
+            """, unsafe_allow_html=True)
+
+    # Download + back
+    st.markdown("<div style='height:.5rem'></div>", unsafe_allow_html=True)
+    st.markdown(f"""
+    <div class="fl-card" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+      <div>
+        <div style="font-size:14px;font-weight:500;color:#0d1b2a">{n_matches} photos matched to your face</div>
+        <div style="font-size:11px;color:#5a6a7e;margin-top:2px">Original resolution</div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    da, db, dc = st.columns(3)
+    with da:
+        if st.button(f"⬇ Download {n_matches} Photos", key="dl_matched_btn", use_container_width=True):
+            _bulk_download(matched)
+    with db:
+        if st.button("← Back to Album", key="back_after_match", use_container_width=True):
+            nav("client_gallery")
+    with dc:
+        if st.button("Try Another Selfie", key="retry_selfie_final", use_container_width=True):
+            st.session_state.recog_step    = 1
+            st.session_state.recog_results = None
+            st.session_state.selfie_file   = None
+            st.rerun()
+
 
 # ─────────────────────────────────────────────────────────────────────────────
-# MAIN ROUTER
+# ROUTER
 # ─────────────────────────────────────────────────────────────────────────────
 def main():
-    init_session()
-    render_sidebar()
-
     page = st.session_state.page
 
-    if page == "login":
-        page_login()
-    elif page == "register":
-        page_register()
-    elif page == "public":
-        page_public()
-    elif page == "dashboard":
-        if require_auth():
-            page_dashboard()
-    elif page == "albums":
-        if require_auth():
-            page_albums()
-    elif page == "upload":
-        if require_auth():
-            page_upload()
-    elif page == "recognition":
-        if require_auth():
-            page_recognition()
-    elif page == "gallery":
-        if require_auth():
-            page_gallery()
-    else:
+    # Auth guard — protected studio pages
+    if page in ["dashboard", "album_detail", "share_settings"] and not st.session_state.token:
         st.session_state.page = "login"
-        st.rerun()
+        page = "login"
+
+    # Client pages need token too
+    if page in ["client_gallery", "face_recognition"] and not st.session_state.token:
+        st.session_state.page = "client_login"
+        page = "client_login"
+
+    routes = {
+        "login":           page_login,
+        "client_login":    page_client_login,
+        "dashboard":       page_dashboard,
+        "album_detail":    page_album_detail,
+        "share_settings":  page_share_settings,
+        "client_gallery":  page_client_gallery,
+        "face_recognition":page_face_recognition,
+    }
+
+    routes.get(page, page_login)()
 
 
 if __name__ == "__main__":

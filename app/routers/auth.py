@@ -38,8 +38,8 @@ logger = logging.getLogger(__name__)
     "/register-user",
     response_model=RegisterUserResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Register a new studio account",
-)
+    summary="Register a new studio account",    
+)   
 def register_user(
     payload: RegisterUserRequest,
     db: Session = Depends(get_db),
@@ -93,10 +93,10 @@ def register_user(
 # ─────────────────────────────────────────────────────────────────────────────
 @router.post(
     "/login-user",
-    response_model=TokenResponse,
     summary="Login with mobile number + password",
 )
 def login_user(
+    
     payload: LoginRequest,
     db: Session = Depends(get_db),
 ):
@@ -105,25 +105,35 @@ def login_user(
     .filter(User.mobile_number == payload.mobile_number)
     .first()
     )
-    if not user or not verify_password(payload.password, user.password_hash):
+    
+    if not user:
         raise HTTPException(
             status_code=200,
             detail={
                 "status": False,
-                "message": "Invalid mobile number or password",
+                "type": "USER_NOT_FOUND",
+                "message": "User not found",
+                "data": None
+            }
+        )
+
+ 
+    if not verify_password(payload.password, user.password_hash):
+        raise HTTPException(
+            status_code=200,
+            detail={
+                "status": False,
+                "type": "INVALID_CREDENTIALS",
+                "message": "Invalid password",
                 "data": None
             }
         )
 
     token = create_access_token(subject=str(user.id))
     return {
-    "status": True,
-    "message": "Login successful",
-    "data": {
-        "access_token": token,
-        "token_type": "bearer",
-        "studio_name": user.studio_name,
-        "user_id": str(user.id),
-        "username": user.username
-    }
+    "access_token": token,
+    "token_type": "bearer",
+    "studio_name": user.studio_name,
+    "user_id": str(user.id),
+    "username": user.username
 }

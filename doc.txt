@@ -546,14 +546,20 @@ def upload_result_badge(filename: str, status: str, person_id: str = None, messa
 
 def nav_item(icon, label, page_key, current_page):
     is_active = current_page == page_key
+    
     bg = "#00E5FF15" if is_active else "transparent"
     color = "#00E5FF" if is_active else "#8B9AB2"
     border = "1px solid #00E5FF33" if is_active else "1px solid transparent"
     weight = "700" if is_active else "500"
 
-
-    st.session_state.page = page_key
-    st.rerun()
+    if st.button(
+        f"{icon}  {label}",
+        key=f"nav_{page_key}",
+        use_container_width=True,
+        type="secondary" if not is_active else "primary"
+    ):
+        st.session_state.page = page_key
+        st.rerun()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # SESSION STATE INIT
@@ -593,18 +599,25 @@ def api_get(path: str, params: dict = None):
 def api_post(path: str, json_data: dict = None, files=None, auth=True):
     try:
         headers = auth_headers() if auth else {}
+        
+        url = f"{st.session_state.base_url}{path}"
+        
         if files:
-            r = requests.post(f"{st.session_state.base_url}{path}",
-                              headers=headers, files=files, timeout=120)
+            r = requests.post(url, headers=headers, files=files, timeout=120)
         else:
-            r = requests.post(f"{st.session_state.base_url}{path}",
-                              headers=headers, json=json_data, timeout=30)
+            r = requests.post(url, headers=headers, json=json_data, timeout=30)
+        
         return r
+
     except requests.exceptions.ConnectionError:
-        st.error("⚡ Cannot connect to backend. Check BASE_URL setting.")
+        st.error("⚡ Cannot connect to backend server.\n\nMake sure FastAPI is running on http://127.0.0.1:8000")
+        st.info("Tip: Run `uvicorn main:app --reload` in another terminal")
+        return None
+    except requests.exceptions.Timeout:
+        st.error("⏱ Request timed out. Backend might be slow or overloaded.")
         return None
     except Exception as e:
-        st.error(f"Request failed: {e}")
+        st.error(f"Unexpected error: {str(e)}")
         return None
 
 def build_image_url(img_path: str) -> str:
@@ -655,6 +668,7 @@ def render_sidebar():
                 ">@{st.session_state.username or ""}</div>
             </div>
             """, unsafe_allow_html=True)
+
 
             st.markdown('<div style="margin-bottom: 0.5rem;"><span style="font-family: DM Mono, monospace; font-size: 0.65rem; color: #4A5568; text-transform: uppercase; letter-spacing: 0.12em;">NAVIGATION</span></div>', unsafe_allow_html=True)
 
@@ -735,37 +749,46 @@ def page_login():
         if st.button("LOGIN →", key="login_btn"):
             if not mobile or not password:
                 st.error("Please fill in all fields.")
-            else:
-                with st.spinner("Authenticating..."):
-                    r = api_post("/login-user", {"mobile_number": mobile, "password": password}, auth=False)
-                if r and r.status_code == 200:
+                st.stop()
+
+            with st.spinner("Authenticating..."):
+                r = api_post("/login-user", {
+                    "mobile_number": mobile.strip(), 
+                    "password": password
+                }, auth=False)
+
+            if r is None:
+                # Connection error already shown by api_post
+                st.stop()
+
+            if r.status_code == 200:
+                try:
                     data = r.json()
                     st.session_state.token = data["access_token"]
                     st.session_state.user_id = data["user_id"]
-                    st.session_state.studio_name = data["studio_name"]
-                    st.session_state.username = data["username"]
+                    st.session_state.studio_name = data.get("studio_name")
+                    st.session_state.username = data.get("username")
                     st.session_state.page = "dashboard"
-                    st.success("Welcome back!")
-                    time.sleep(0.5)
+                    st.success("✅ Login successful! Welcome back.")
+                    time.sleep(0.7)
                     st.rerun()
-                elif r:
-                    err = r.json().get("detail", "Login failed.")
-                    st.error(f"✕ {err}")
+                except Exception as e:
+                    st.error("Received invalid response from server.")
+                    st.stop()
 
-        st.markdown("</div>", unsafe_allow_html=True)
-
-        st.markdown("""
-        <p style="
-            text-align: center; margin-top: 1rem;
-            font-family: 'DM Mono', monospace; font-size: 0.75rem;
-            color: #4A5568;
-        ">No account? <span style="color: #00E5FF; cursor: pointer;">Register your studio</span></p>
-        """, unsafe_allow_html=True)
-        col_a, col_b = st.columns(2)
-        with col_b:
-            if st.button("Create Studio Account", key="goto_register"):
-                st.session_state.page = "register"
-                st.rerun()
+            else:
+                # This will now properly catch 401, 422, 404 etc.
+                try:
+                    error_msg = r.json().get("detail", f"Login failed (Status: {r.status_code})")
+                except:
+                    error_msg = f"Login failed. Server returned status {r.status_code}"
+                
+                st.error(f"✕ {error_msg}")
+                
+                if r.status_code in [401, 403]:
+                    st.warning("Invalid mobile number or password. Please check your credentials.")
+                elif r.status_code == 404:
+                    st.info("Endpoint not found. Check backend route.")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PAGE: REGISTER

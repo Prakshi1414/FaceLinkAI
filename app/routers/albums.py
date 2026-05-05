@@ -117,9 +117,33 @@ def get_albums(
 def get_album(
     album_id: _uuid.UUID,
     db: Session = Depends(get_db),
-   current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
-    return _get_album_or_404(album_id, current_user, db)
+
+    album = _get_album_or_404(album_id, current_user, db)
+
+    photos = (
+        db.query(Photo)
+        .filter(Photo.album_id == album.id)
+        .order_by(Photo.uploaded_at)
+        .all()
+    )
+
+    return {
+        "id": album.id,
+        "album_name": album.album_name,
+        "event_date": album.event_date,
+        "total_photos": album.total_photos,
+        "total_size": album.total_size,
+        "share_link": album.share_link,
+        "is_active": album.is_active,
+        "created_at": album.created_at,
+
+        # ✅ NEW FIELD
+        "photos": [
+            PhotoResponse.model_validate(p) for p in photos
+        ]
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
