@@ -8,27 +8,51 @@ from pydantic import field_validator
 import re
 import uuid
 from datetime import date, datetime
-from typing import Any, Optional
-from typing import List, Optional
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from typing import Any, Optional ,Literal
+from typing import Generic, List, Optional , TypeVar
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 from app.models.models import User
 
 # ═════════════════════════════════════════════════════════════════════════════
 # AUTH
 # ═════════════════════════════════════════════════════════════════════════════
 
+T = TypeVar("T")
+
+class ApiResponse(BaseModel, Generic[T]):
+    status: bool
+    message: str
+    data: Optional[T] = None
 
 class RegisterUserRequest(BaseModel):
-    studio_name:   str = Field(..., min_length=2, max_length=120)
-    mobile_number: str = Field(..., min_length=7, max_length=20)
+    studio_name: Optional[str] = None
+    mobile_number: str 
     email:         Optional[EmailStr] = None
     password:      str = Field(..., min_length=6)
-    username: str
+    username: Optional[str] = None
+
+    role: str = "studio"
+    
+
+    @model_validator(mode="after")
+    def validate_studio_name(self):
+
+        if self.role == "studio" and not self.studio_name:
+            raise ValueError("studio_name is required for studio role")
+
+        return self
 
     @field_validator("mobile_number")
     def validate_phone(cls, v):
-        if not v.isdigit() or len(v) != 10:
-            raise ValueError("Phone must be exactly 10 digits (0-9 only)")
+        if not v:
+            raise ValueError("Mobile number is required")
+
+        if not v.isdigit():
+            raise ValueError("Phone must contain only digits (0-9)")
+
+        if len(v) != 10:
+            raise ValueError("Write exactly 10 digit mobile number")
+
         return v
 
     @field_validator("email")
@@ -41,7 +65,7 @@ class RegisterUserRequest(BaseModel):
             raise ValueError("Email must contain @ and .com")
 
         return v
-
+    
     @field_validator("password")
     def validate_password(cls, v):
 
@@ -58,14 +82,16 @@ class RegisterUserRequest(BaseModel):
         return v
 
 
+
 class RegisterUserResponse(BaseModel):
     id:            uuid.UUID
-    studio_name:   str
+    studio_name: Optional[str] = None
     mobile_number: str
     email:         Optional[str]
     created_at:    datetime
     username: Optional[str]
     model_config = {"from_attributes": True}
+    role: str
 
 
 class LoginRequest(BaseModel):
@@ -82,9 +108,10 @@ class LoginRequest(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type:   str = "bearer"
-    studio_name:  str
+    studio_name: Optional[str] = None  
     user_id:      uuid.UUID
-    username: str
+    username: Optional[str] = None  
+    role:str
 
 # ═════════════════════════════════════════════════════════════════════════════
 # ALBUM
@@ -94,11 +121,14 @@ class TokenResponse(BaseModel):
 class CreateAlbumRequest(BaseModel):
     album_name:  str = Field(..., min_length=1, max_length=200)
     event_date:  Optional[date] = None
+    client_name: str
+    client_mobile: str
 
 
 class AlbumResponse(BaseModel):
-    id: uuid.UUID
+    id: uuid.UUID   
     album_name: str
+    album_code: Optional[str] = None
     event_date: Optional[date]
     total_photos: int
     total_size: int
@@ -209,3 +239,36 @@ class GalleryResponse(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
+
+
+class JoinRequest(BaseModel):
+    album_code: Optional[str] = None
+    share_token: Optional[str] = None
+
+
+class JoinAlbumRequest(BaseModel):
+    album_code: str
+
+class JoinRequestItem(BaseModel):
+    request_id: uuid.UUID
+    album_id: uuid.UUID
+    album_name: str
+
+    requested_user_id: uuid.UUID
+    requested_user_name: str | None = None
+    requested_user_mobile: str | None = None
+
+    status: str
+
+    created_at: datetime
+
+
+class JoinRequestListResponse(BaseModel):
+    requests: list[JoinRequestItem]
+
+class JoinRequestAction(BaseModel):
+    request_id: uuid.UUID
+    action: Literal["approved", "rejected"]
+
+class AlbumPhotosResponse(BaseModel):
+    photos: list[PhotoResponse]

@@ -13,11 +13,13 @@ import os
 from contextlib import asynccontextmanager
 from app.ml.startup import bootstrap_faiss_from_db
 from pathlib import Path
-
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from fastapi import Request
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-
+from app.schemas.schemas import ApiResponse
 from app.config import settings
 from app.db.database import engine
 from app.db.init_db import init_db
@@ -29,6 +31,7 @@ logging.basicConfig(
     format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
 )
 logger = logging.getLogger(__name__)
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -72,12 +75,35 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
+@app.exception_handler(RequestValidationError)
+def validation_exception_handler(request: Request, exc: RequestValidationError):
+
+    errors = exc.errors()
+    first_error = errors[0] if errors else {}
+
+    message = first_error.get("msg", "Validation error")
+    field = first_error.get("loc", ["field"])[-1]
+
+    return JSONResponse(
+        status_code=200,   # you want 200 OK (as per your system)
+        content=ApiResponse(
+            status=False,
+            message=message,
+            data={
+                "field": field,
+                "type": first_error.get("type")
+            }
+        ).model_dump()
+    )
+
 @app.get("/")
 def home():
     return {
         "message": "FaceLinkAI API is running successfully 🚀",
         "status": "active"
     }
+
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CORS  (tighten allowed_origins in production)

@@ -18,7 +18,7 @@ from app.config import settings
 from app.db.database import get_db
 from app.ml.face_engine import get_faiss_index, get_embedding_for_query
 from app.models.models import Album, Photo, User
-from app.schemas.schemas import RecognizeResponse, RecognizedPhoto
+from app.schemas.schemas import RecognizeResponse, RecognizedPhoto , ApiResponse
 from app.utils.auth import get_current_user
 
 router = APIRouter(tags=["Recognition"])
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 @router.post(
     "/recognize-face",
-    response_model=RecognizeResponse,
+    response_model=ApiResponse[RecognizeResponse],
     summary="Upload a query face image and find all matching photos in your studio albums",
 )
 async def recognize_face(
@@ -38,37 +38,35 @@ async def recognize_face(
     # ── 1. Read image bytes and extract embedding ─────────────────────────────
     image_bytes = await file.read()
     if not image_bytes:
-        raise HTTPException(
-            status_code=200,
-            detail={
-                "status": False,
-                "message": "Empty file",
-                "data": None
-            }
-        )
+         return {
+            "status": False,
+            "message": "Empty file",
+            "data": None
+        }
 
     embedding = get_embedding_for_query(image_bytes)
     if embedding is None:
-        raise HTTPException(
-            status_code=200,
-            detail={
-                "status": False,
-                "message": "No face detected. Please upload a clear frontal face image",
-                "data": None
-            }
-        )
+        return {
+            "status": False,
+            "message": "No face detected. Please upload a clear frontal face image",
+            "data": None
+        }
 
     # ── 2. FAISS search (per-user index) ──────────────────────────────────────
     user_id    = str(current_user.id)
     user_index = get_faiss_index(user_id, db)
 
     if user_index.total_persons == 0:
-        return RecognizeResponse(
-            person_id        = None,
-            is_new_person    = True,
-            similarity_score = None,
-            matched_photos   = [],
-        )
+        return {
+            "status": True,
+            "message": "No known persons in system",
+            "data": {
+                "person_id": None,
+                "is_new_person": True,
+                "similarity_score": None,
+                "matched_photos": []
+            }
+        }
 
     person_id, similarity_score = user_index.search(
         embedding,
@@ -109,17 +107,13 @@ async def recognize_face(
                 for photo, album_name in rows
             ]
 
-    logger.info(
-        "recognize-face: studio=%s  person_id=%s  score=%s  matches=%d",
-        current_user.id,
-        person_id,
-        f"{similarity_score:.4f}" if similarity_score is not None else "N/A",
-        len(matched_photos),
-    )
-
-    return RecognizeResponse(
-        person_id        = person_id,
-        is_new_person    = is_new_person,
-        similarity_score = round(similarity_score, 4) if similarity_score else None,
-        matched_photos   = matched_photos,
-    )
+    return {
+        "status": True,
+        "message": "Face recognition completed",
+        "data": {
+            "person_id": person_id,
+            "is_new_person": is_new_person,
+            "similarity_score": round(similarity_score, 4) if similarity_score else None,
+            "matched_photos": matched_photos
+        }
+    }

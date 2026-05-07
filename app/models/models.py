@@ -20,6 +20,9 @@ def _utcnow() -> datetime:
 # ─────────────────────────────────────────────────────────────────────────────
 # 1. register_user  (Studio / tenant account)
 # ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# 1. register_user  (Studio / tenant account)
+# ─────────────────────────────────────────────────────────────────────────────
 class User(Base):
     __tablename__ = "users"
 
@@ -29,24 +32,33 @@ class User(Base):
         default=uuid.uuid4,
         nullable=False,
     )
-    studio_name    = Column(Text, nullable=False)
+    studio_name    = Column(Text, nullable=True)
     mobile_number  = Column(Text, nullable=False, unique=True)
     email          = Column(Text, nullable=True,  unique=True)
     password_hash  = Column(Text, nullable=False)
     created_at     = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
-    username = Column(String, nullable=False)
+    username = Column(String, nullable=True)
+    role = Column(String, default="studio")
 
     # ── Relationships ─────────────────────────────────────────────────────────
-    albums = relationship(
+    
+    # albums created by studio
+    created_albums = relationship(
         "Album",
-        back_populates="user",
+        foreign_keys="Album.user_id",
+        back_populates="studio",
         cascade="all, delete-orphan",
-        lazy="dynamic",
+    )
+
+    # albums assigned to this user as client
+    client_albums = relationship(
+        "Album",
+        foreign_keys="Album.owner_id",
+        back_populates="client",
     )
 
     def __repr__(self) -> str:
         return f"<user id={self.id} studio={self.studio_name!r}>"
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 2. albums
@@ -65,7 +77,19 @@ class Album(Base):
     ForeignKey("users.id", ondelete="CASCADE"),
     nullable=False,
     index=True,
-)
+    )
+
+    owner_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id"),
+        nullable=True
+    )
+
+    album_code = Column(
+        String,
+        unique=True,
+        nullable=False
+    )
     
     album_name   = Column(Text, nullable=False)
     event_date   = Column(Date, nullable=True)
@@ -76,7 +100,21 @@ class Album(Base):
     created_at   = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
 
     # ── Relationships ─────────────────────────────────────────────────────────
-    user = relationship("User", back_populates="albums")
+      # Studio relationship (creator)
+    studio = relationship(
+        "User",
+        foreign_keys=[user_id],
+        back_populates="created_albums"
+    )
+
+    # Client relationship (owner/handler)
+    client = relationship(
+        "User",
+        foreign_keys=[owner_id],
+        back_populates="client_albums"
+    )
+
+
     photos = relationship(
         "Photo",
         back_populates="album",
@@ -135,4 +173,24 @@ class Person(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     album_id = Column(UUID(as_uuid=True), ForeignKey("albums.id"))
 
-    created_at = Column(DateTime(timezone=True), default=_utcnow)
+    created_at = Column(DateTime(timezone=True), default=_utcnow)    
+
+class AlbumInvite(Base):
+    __tablename__ = "album_invites"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    album_id = Column(UUID(as_uuid=True), ForeignKey("albums.id"))
+    invited_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    requested_user_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id"),
+        nullable=True
+    )
+
+    invite_code = Column(String(20), unique=True)
+
+    status = Column(String(20), default="Approved")
+    is_active = Column(Boolean, default=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)

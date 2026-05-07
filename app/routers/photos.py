@@ -15,7 +15,7 @@ from app.config import settings
 from app.db.database import get_db
 from app.ml.face_engine import embedding_to_bytes, process_image_for_clustering
 from app.models.models import Album, Photo, User
-from app.schemas.schemas import UploadPhotosResponse, UploadResult
+from app.schemas.schemas import UploadPhotosResponse, UploadResult ,ApiResponse
 from app.utils.auth import get_current_user
 
 router = APIRouter(tags=["Photos"])
@@ -162,7 +162,7 @@ def _run_ai_pipeline(
 
 @router.post(
     "/upload-album-photos",
-    response_model=UploadPhotosResponse,
+    response_model=ApiResponse[UploadPhotosResponse],
     status_code=status.HTTP_201_CREATED,
     summary="Upload photos to an album. Face detection runs automatically per photo.",
 )
@@ -183,14 +183,12 @@ async def upload_album_photos(
         .first()
     )
     if not album:
-        raise HTTPException(
-            status_code=200,
-            detail={
-                "status": False,
-                "message": "Album not found",
-                "data": None
-            }
-        )
+       return {
+            "status": False,
+            "message": "Album not found",
+            "data": None
+        }
+
 
     studio_id  = str(current_user.id)
     album_id_s = str(album_id)
@@ -265,7 +263,7 @@ async def upload_album_photos(
                         status="error",
                         message=f"AI processing error: {exc}",
                     ))
-                    logger.exception("AI pipeline failed for %s", original_name)
+                  
                     continue
 
                 # ── Commit file to permanent storage ──────────────────────────
@@ -293,9 +291,7 @@ async def upload_album_photos(
                         person_id = None,
                         message   = ai_msg,
                     ))
-                    logger.info(
-                        "No face – photo saved without embedding: %s", relative_db
-                    )
+                    
 
                 else:
                     # ── One or more faces: save one Photo row per face ─────────
@@ -355,8 +351,12 @@ async def upload_album_photos(
             album_id, photos_added, bytes_added,
         )
 
-    return UploadPhotosResponse(
-        album_id       = album_id,
-        total_uploaded = photos_added,
-        results        = results,
-    )
+    return {
+        "status": True,
+        "message": "Photos uploaded successfully",
+        "data": {
+            "album_id": album_id,
+            "total_uploaded": photos_added,
+            "results": results
+        }
+     }

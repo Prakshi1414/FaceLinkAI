@@ -3,5 +3,14 @@ __pycache__/
 *.pyc
 .vscode/
 .env
+.DS_Store
 data/
 .streamlit/config.toml
+
+
+
+# Node / Frontend
+node_modules/
+dist/
+build/
+.vite-source-tags.js
