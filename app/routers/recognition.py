@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import logging
-from typing import List
+from typing import List 
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
@@ -52,22 +52,48 @@ async def recognize_face(
             "data": None
         }
 
-    # ── 2. FAISS search (per-user index) ──────────────────────────────────────
-    invite = db.query(AlbumInvite).filter(
-        AlbumInvite.user_id == current_user.id,
-        AlbumInvite.status == "accepted"
-    ).first()
+   
+    # ── Get album based on user role ─────────────────────────────
 
-    album = db.query(Album).filter(
-        Album.id == invite.album_id
-    ).first()
+    if current_user.role == "studio":
+
+        album = db.query(Album).filter(
+            Album.user_id == current_user.id
+        ).first()
+
+    else:
+
+        invite = db.query(AlbumInvite).filter(
+            AlbumInvite.user_id == current_user.id,
+            AlbumInvite.status == "accepted"
+        ).first()
+
+        if not invite:
+            return {
+                "status": False,
+                "message": "No accessible album found",
+                "data": None
+            }
+
+        album = db.query(Album).filter(
+            Album.id == invite.album_id
+        ).first()
+
+    if not album:
+        return {
+            "status": False,
+            "message": "Album not found",
+            "data": None
+        }
+
+    # ── Use studio owner's FAISS index ───────────────────────────
 
     studio_owner_id = str(album.user_id)
 
     user_index = get_faiss_index(
         studio_owner_id,
         db
-    )
+)
 
     if user_index.total_persons == 0:
         return {
@@ -91,35 +117,28 @@ async def recognize_face(
 
     # ── 3. DB lookup – only within this studio's albums ───────────────────────
     if person_id:
-        studio_album_ids = [
-            row[0]
-            for row in db.query(Album.id)
-            .filter(Album.user_id == current_user.id)
-            .all()
-        ]
 
-        if studio_album_ids:
-            rows = (
-                db.query(Photo, Album.album_name)
-                .join(Album, Album.id == Photo.album_id)
-                .filter(
-                    Photo.person_id == person_id,
-                    Photo.album_id == album.id,
-                )
-                .order_by(Photo.uploaded_at.desc())
-                .all()
+        rows = (
+            db.query(Photo, Album.album_name)
+            .join(Album, Album.id == Photo.album_id)
+            .filter(
+                Photo.person_id == person_id,
+                Photo.album_id == album.id,
             )
-            matched_photos = [
-                RecognizedPhoto(
-                    photo_id   = photo.id,
-                    img_path   = photo.img_path,
-                    album_id   = photo.album_id,
-                    album_name = album_name,
-                    similarity = round(similarity_score, 4),
-                )
-                for photo, album_name in rows
-            ]
+            .order_by(Photo.uploaded_at.desc())
+            .all()
+        )
 
+        matched_photos = [
+            RecognizedPhoto(
+                photo_id   = photo.id,
+                img_path   = photo.img_path,
+                album_id   = photo.album_id,
+                album_name = album_name,
+                similarity = round(similarity_score, 4),
+            )
+            for photo, album_name in rows
+        ]
     return {
         "status": True,
         "message": "Face recognition completed",
