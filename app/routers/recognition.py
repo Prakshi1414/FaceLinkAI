@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import logging
-from typing import List 
+from typing import List
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.db.database import get_db
 from app.ml.face_engine import get_faiss_index, get_embedding_for_query
-from app.models.models import Album, Photo, User, AlbumInvite
+from app.models.models import Album, Photo, User , AlbumInvite
 from app.schemas.schemas import RecognizeResponse, RecognizedPhoto , ApiResponse
 from app.utils.auth import get_current_user
 
@@ -52,48 +52,63 @@ async def recognize_face(
             "data": None
         }
 
-   
-    # ── Get album based on user role ─────────────────────────────
+    # ── 2. FAISS search (per-user index) ──────────────────────────────────────
+    # ── 2. Find accessible album and studio owner ─────────────────────────────
 
     if current_user.role == "studio":
 
-        album = db.query(Album).filter(
-            Album.user_id == current_user.id
-        ).first()
+        album = (
+            db.query(Album)
+            .filter(Album.user_id == current_user.id)
+            .first()
+        )
 
     else:
 
-        invite = db.query(AlbumInvite).filter(
-            AlbumInvite.user_id == current_user.id,
-            AlbumInvite.status == "accepted"
-        ).first()
+        # ── CLIENT ACCESS ─────────────────────────────────────────
 
-        if not invite:
+        album = (
+            db.query(Album)
+            .filter(Album.owner_id == current_user.id)
+            .first()
+        )
+
+        # ── RELATIVE ACCESS ──────────────────────────────────────
+
+        if not album:
+
+            invite = (
+                db.query(AlbumInvite)
+                .filter(
+                    AlbumInvite.requested_user_id == current_user.id,
+                    AlbumInvite.status == "Approved",
+                    AlbumInvite.is_active == True
+                )
+                .first()
+            )
+
+            if invite:
+
+                album = (
+                    db.query(Album)
+                    .filter(Album.id == invite.album_id)
+                    .first()
+                )
+
+        if not album:
             return {
                 "status": False,
                 "message": "No accessible album found",
                 "data": None
             }
 
-        album = db.query(Album).filter(
-            Album.id == invite.album_id
-        ).first()
 
-    if not album:
-        return {
-            "status": False,
-            "message": "Album not found",
-            "data": None
-        }
-
-    # ── Use studio owner's FAISS index ───────────────────────────
+    # IMPORTANT:
+    # Always use studio owner's FAISS index
 
     studio_owner_id = str(album.user_id)
 
-    user_index = get_faiss_index(
-        studio_owner_id,
-        db
-)
+    user_index = get_faiss_index(studio_owner_id, db)
 
     if user_index.total_persons == 0:
         return {
@@ -106,7 +121,23 @@ async def recognize_face(
                 "matched_photos": []
             }
         }
+    # ── IMPORTANT: Use STUDIO OWNER FAISS INDEX ─────────────────────────────
 
+    studio_owner_id = str(album.user_id)
+
+    user_index = get_faiss_index(studio_owner_id, db)
+
+    if user_index.total_persons == 0:
+        return {
+            "status": True,
+            "message": "No known persons in system",
+            "data": {
+                "person_id": None,
+                "is_new_person": True,
+                "similarity_score": None,
+                "matched_photos": []
+            }
+        }
     person_id, similarity_score = user_index.search(
         embedding,
         threshold=settings.FACE_SIMILARITY_THRESHOLD,
@@ -117,13 +148,12 @@ async def recognize_face(
 
     # ── 3. DB lookup – only within this studio's albums ───────────────────────
     if person_id:
-
         rows = (
             db.query(Photo, Album.album_name)
             .join(Album, Album.id == Photo.album_id)
             .filter(
                 Photo.person_id == person_id,
-                Photo.album_id == album.id,
+                Album.user_id == album.user_id,
             )
             .order_by(Photo.uploaded_at.desc())
             .all()
