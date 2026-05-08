@@ -17,6 +17,7 @@ from app.ml.face_engine import embedding_to_bytes, process_image_for_clustering
 from app.models.models import Album, Photo, User
 from app.schemas.schemas import UploadPhotosResponse, UploadResult ,ApiResponse
 from app.utils.auth import get_current_user
+from app.utils.image_compression import compress_image
 
 router = APIRouter(tags=["Photos"])
 logger = logging.getLogger(__name__)
@@ -61,7 +62,7 @@ class TempFileHandler:
         studio_id: str,
         album_id: str,
     ) -> None:
-        ext = Path(original_filename).suffix.lower()
+        ext = ".jpg" 
         safe_stem = _uuid.uuid4().hex
         self._safe_name = f"{safe_stem}{ext}"
         self._temp_path = _temp_dir(studio_id, album_id) / self._safe_name
@@ -69,6 +70,7 @@ class TempFileHandler:
         self._temp_path.write_bytes(file_bytes)
         logger.debug("Temp write: %s (%d bytes)", self._temp_path, len(file_bytes))
 
+    
     def __enter__(self) -> "TempFileHandler":
         return self
 
@@ -90,13 +92,26 @@ class TempFileHandler:
     def safe_name(self) -> str:
         return self._safe_name
 
-    def commit(self, image_dir: Path) -> Path:
+    def commit(self, image_dir: Path, quality: int = 75, max_width: int = 1920) -> Tuple[Path, int]:
         final_path = image_dir / self._safe_name
-        shutil.move(str(self._temp_path), str(final_path))
+        
+        # COMPRESS instead of shutil.move!
+        compress_image(
+            input_path=str(self._temp_path),
+            output_path=str(final_path),
+            quality=quality,
+            max_width=max_width
+        )
+        
+        # Get the size of the newly compressed file
+        compressed_size = final_path.stat().st_size
+        
         self._committed = True
-        logger.debug("Committed: %s → %s", self._temp_path, final_path)
-        return final_path
-
+        logger.debug(
+            "Committed & Compressed: %s → %s (Size: %d bytes)", 
+            self._temp_path, final_path, compressed_size
+        )
+        return final_path, compressed_size
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Image validation (unchanged)
@@ -267,7 +282,8 @@ async def upload_album_photos(
                     continue
 
                 # ── Commit file to permanent storage ──────────────────────────
-                final_path  = tmp.commit(img_dir)
+               # ── Commit file to permanent storage (NOW RETURNS COMPRESSED SIZE) ──
+                final_path, compressed_size = tmp.commit(img_dir)
                 relative_db = str(Path(studio_id) / album_id_s / tmp.safe_name)
 
                 if photo_status == "no_face" or not face_list:
@@ -278,12 +294,12 @@ async def upload_album_photos(
                         img_path  = relative_db,
                         person_id = None,
                         embedding = None,
-                        file_size = file_size,
+                        file_size = compressed_size,
                         
                     )
                     db.add(photo)
                     photos_added += 1
-                    bytes_added  += file_size
+                    bytes_added  += compressed_size
 
                     results.append(UploadResult(
                         filename  = original_name,
@@ -306,12 +322,12 @@ async def upload_album_photos(
                             img_path  = relative_db,
                             person_id = person_id,
                             embedding = embedding_bytes,
-                            file_size = file_size,
+                            file_size = compressed_size,
                             
                         )
                         db.add(photo)
                         photos_added += 1
-                        bytes_added  += file_size
+                        bytes_added  += compressed_size
 
                         if not first_result_appended:
                             results.append(UploadResult(

@@ -53,8 +53,16 @@ async def recognize_face(
         }
 
     # ── 2. FAISS search (per-user index) ──────────────────────────────────────
-    user_id    = str(current_user.id)
-    user_index = get_faiss_index(user_id, db)
+    album = db.query(Album).filter(
+        Album.id == album_id
+    ).first()
+
+    studio_owner_id = str(album.user_id)
+
+    user_index = get_faiss_index(
+        studio_owner_id,
+        db
+    )
 
     if user_index.total_persons == 0:
         return {
@@ -91,7 +99,7 @@ async def recognize_face(
                 .join(Album, Album.id == Photo.album_id)
                 .filter(
                     Photo.person_id == person_id,
-                    Photo.album_id.in_(studio_album_ids),
+                    Photo.album_id == album.id,
                 )
                 .order_by(Photo.uploaded_at.desc())
                 .all()
