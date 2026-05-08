@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.db.database import get_db
 from app.ml.face_engine import get_faiss_index, get_embedding_for_query
-from app.models.models import Album, Photo, User
+from app.models.models import Album, Photo, User, AlbumInvite
 from app.schemas.schemas import RecognizeResponse, RecognizedPhoto , ApiResponse
 from app.utils.auth import get_current_user
 
@@ -53,8 +53,13 @@ async def recognize_face(
         }
 
     # ── 2. FAISS search (per-user index) ──────────────────────────────────────
+    invite = db.query(AlbumInvite).filter(
+        AlbumInvite.user_id == current_user.id,
+        AlbumInvite.status == "accepted"
+    ).first()
+
     album = db.query(Album).filter(
-        Album.id == album_id
+        Album.id == invite.album_id
     ).first()
 
     studio_owner_id = str(album.user_id)
