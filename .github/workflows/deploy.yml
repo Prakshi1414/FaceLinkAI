@@ -1,4 +1,4 @@
-name: Deploy FaceLinkAI
+name: Deploy Backend
 
 on:
   push:
@@ -23,8 +23,10 @@ jobs:
 
             git pull origin main
 
-            npm install
+            source venv/bin/activate
 
-            npm run build
+            pip install -r requirements.txt
 
-            pm2 restart all
+            sudo systemctl restart facelink
+
+            sudo systemctl status facelink --no-pager
