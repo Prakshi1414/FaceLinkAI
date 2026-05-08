@@ -7,7 +7,7 @@ from datetime import date, datetime
 from typing import Optional
 
 # ─────────────────────────────────────────────────────────────────────────────
-# CONFIG
+# CONFIG test
 # ─────────────────────────────────────────────────────────────────────────────
 API_BASE   = "http://127.0.0.1:8000"
 IMAGE_BASE = f"{API_BASE}/images"
