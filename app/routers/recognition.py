@@ -11,9 +11,9 @@ from __future__ import annotations
 import logging
 from typing import List
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File,Form ,  HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
-
+import uuid as _uuid
 from app.config import settings
 from app.db.database import get_db
 from app.ml.face_engine import get_faiss_index, get_embedding_for_query
@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
     summary="Upload a query face image and find all matching photos in your studio albums",
 )
 async def recognize_face(
+    album_id: _uuid.UUID = Form(...),
     file: UploadFile = File(..., description="Query image containing one face"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -53,7 +54,6 @@ async def recognize_face(
         }
 
     # ── 2. FAISS search (per-user index) ──────────────────────────────────────
-    # ── 2. Find accessible album and studio owner ─────────────────────────────
 
     if current_user.role == "studio":
 
@@ -81,7 +81,7 @@ async def recognize_face(
                 db.query(AlbumInvite)
                 .filter(
                     AlbumInvite.requested_user_id == current_user.id,
-                    AlbumInvite.status == "Approved",
+                    AlbumInvite.status == "approved",
                     AlbumInvite.is_active == True
                 )
                 .first()
@@ -121,23 +121,7 @@ async def recognize_face(
                 "matched_photos": []
             }
         }
-    # ── IMPORTANT: Use STUDIO OWNER FAISS INDEX ─────────────────────────────
-
-    studio_owner_id = str(album.user_id)
-
-    user_index = get_faiss_index(studio_owner_id, db)
-
-    if user_index.total_persons == 0:
-        return {
-            "status": True,
-            "message": "No known persons in system",
-            "data": {
-                "person_id": None,
-                "is_new_person": True,
-                "similarity_score": None,
-                "matched_photos": []
-            }
-        }
+    
     person_id, similarity_score = user_index.search(
         embedding,
         threshold=settings.FACE_SIMILARITY_THRESHOLD,
@@ -147,13 +131,13 @@ async def recognize_face(
     matched_photos: List[RecognizedPhoto] = []
 
     # ── 3. DB lookup – only within this studio's albums ───────────────────────
-    if person_id:
+    if person_id is not None:
         rows = (
             db.query(Photo, Album.album_name)
             .join(Album, Album.id == Photo.album_id)
             .filter(
                 Photo.person_id == person_id,
-                Album.user_id == album.user_id,
+                Photo.album_id == album_id,
             )
             .order_by(Photo.uploaded_at.desc())
             .all()

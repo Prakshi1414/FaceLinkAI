@@ -3,15 +3,6 @@ from PIL import Image
 import io
 
 def compress_image(input_path: str, output_path: str, quality: int = 70, max_width: int = 1920) -> None:
-    """
-    Compresses an image from input_path and saves it to output_path.
-    
-    Args:
-        input_path: Path to the original image (e.g., data/temp/photo.jpg)
-        output_path: Path to save the compressed image (e.g., data/images/photo.jpg)
-        quality: JPEG quality (1-100). 70-80 is usually a great balance.
-        max_width: Maximum width in pixels. If image is wider, it gets resized.
-    """
     try:
         # Open the image from the temp folder
         with Image.open(input_path) as img:
