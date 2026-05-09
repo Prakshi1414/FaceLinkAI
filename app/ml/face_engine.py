@@ -45,32 +45,41 @@ CONFIDENCE_THRESHOLD = 0.70
 # In-memory FAISS store (unchanged from new backend – correct)
 # ─────────────────────────────────────────────────────────────────────────────
 class FAISSPersonIndex:
-    """Thread-safe in-memory FAISS index mapping centroids → person_ids."""
+    """Thread-safe in-memory FAISS index storing ALL face embeddings per person."""
 
     def __init__(self) -> None:
-        self._lock     = threading.Lock()
-        self._index    = faiss.IndexFlatIP(EMBEDDING_DIM)
-        self._person_ids: List[str]              = []
-        self._centroids: Dict[str, np.ndarray]   = {}
+        self._lock = threading.Lock()
+        self._index = faiss.IndexFlatIP(EMBEDDING_DIM)
+        self._person_ids: List[str] = []                    # FAISS row → person_id
+        self._embeddings: Dict[str, List[np.ndarray]] = {}  # person_id → [emb1, emb2, ...]
 
     @staticmethod
     def _l2_norm(v: np.ndarray) -> np.ndarray:
         norm = np.linalg.norm(v)
         return v / norm if norm > 0 else v
 
-    def _rebuild_index(self) -> None:
-        self._index      = faiss.IndexFlatIP(EMBEDDING_DIM)
-        self._person_ids = []
-        for pid, centroid in self._centroids.items():
-            normed = self._l2_norm(centroid).reshape(1, -1).astype("float32")
-            self._index.add(normed)
-            self._person_ids.append(pid)
-
-    def load_from_db(self, centroids: Dict[str, np.ndarray]) -> None:
+    def load_from_db(self, embeddings: Dict[str, List[np.ndarray]]) -> None:
+        """Load ALL individual embeddings per person (not centroids)."""
         with self._lock:
-            self._centroids = {pid: arr.copy() for pid, arr in centroids.items()}
+            self._embeddings = {
+                pid: [e.copy() for e in embs]
+                for pid, embs in embeddings.items()
+            }
             self._rebuild_index()
-        logger.info("FAISS index loaded with %d persons.", len(self._centroids))
+        total_emb = sum(len(v) for v in self._embeddings.values())
+        logger.info(
+            "FAISS index loaded: %d embeddings across %d persons.",
+            total_emb, len(self._embeddings),
+        )
+
+    def _rebuild_index(self) -> None:
+        self._index = faiss.IndexFlatIP(EMBEDDING_DIM)
+        self._person_ids = []
+        for pid, emb_list in self._embeddings.items():
+            for emb in emb_list:
+                normed = self._l2_norm(emb).reshape(1, -1).astype("float32")
+                self._index.add(normed)
+                self._person_ids.append(pid)
 
     def search(
         self,
@@ -83,24 +92,36 @@ class FAISSPersonIndex:
                 return None, 0.0
             scores, indices = self._index.search(normed, k=1)
         score = float(scores[0][0])
-        idx   = int(indices[0][0])
+        idx = int(indices[0][0])
+        
+        # ✅ NEW: Log the match score here!
+        logger.info(
+            "FAISS Search → Top score: %.4f (Threshold: %.2f) → Matched: %s",
+            score, threshold, score >= threshold
+        )
+
         if score >= threshold and 0 <= idx < len(self._person_ids):
             return self._person_ids[idx], score
         return None, score
 
-    def add_or_update(self, person_id: str, embedding: np.ndarray) -> None:
+    def add_embedding(self, person_id: str, embedding: np.ndarray) -> None:
+        """Add a single face embedding for a person — no averaging!"""
         with self._lock:
-            if person_id in self._centroids:
-                old = self._centroids[person_id]
-                self._centroids[person_id] = (old + embedding) / 2.0
-            else:
-                self._centroids[person_id] = embedding.copy()
-            self._rebuild_index()
+            if person_id not in self._embeddings:
+                self._embeddings[person_id] = []
+            self._embeddings[person_id].append(embedding.copy())
+            # Add directly to FAISS — no full rebuild needed
+            normed = self._l2_norm(embedding).reshape(1, -1).astype("float32")
+            self._index.add(normed)
+            self._person_ids.append(person_id)
+
+    def get_embedding_count(self, person_id: str) -> int:
+        with self._lock:
+            return len(self._embeddings.get(person_id, []))
 
     @property
     def total_persons(self) -> int:
-        return len(self._centroids)
-
+        return len(self._embeddings)
 
 # Module-level per-user FAISS indexes
 faiss_indexes: Dict[str, FAISSPersonIndex] = {}
@@ -114,23 +135,31 @@ def get_faiss_index(user_id: str, db: Session) -> FAISSPersonIndex:
         index = FAISSPersonIndex()
 
         if db is not None:
-            persons = db.query(Person).filter(Person.user_id == user_id).all()
+            # ── Load ALL individual face embeddings from Photo table ──
+            from app.models.models import Photo, Album  # avoid circular import
 
-        # 🔥 DB se centroids load karo
-        persons = db.query(Person).filter(Person.user_id == user_id).all()
+            photos = (
+                db.query(Photo)
+                .join(Album, Album.id == Photo.album_id)
+                .filter(Album.user_id == user_id)
+                .filter(Photo.embedding.isnot(None))
+                .filter(Photo.person_id.isnot(None))
+                .all()
+            )
 
-        centroids = {}
-        for p in persons:
-            if p.centroid:
-                emb = np.array(p.centroid, dtype="float32")
-                centroids[str(p.person_id)] = emb
+            embeddings: Dict[str, List[np.ndarray]] = {}
+            for photo in photos:
+                pid = str(photo.person_id)
+                emb = bytes_to_embedding(photo.embedding)
+                if pid not in embeddings:
+                    embeddings[pid] = []
+                embeddings[pid].append(emb)
 
-        index.load_from_db(centroids)
+            index.load_from_db(embeddings)
 
         faiss_indexes[user_id] = index
 
     return faiss_indexes[user_id]
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # FIX: Unified extract + embed using DeepFace.extract_faces (OLD working way)
@@ -154,7 +183,7 @@ def extract_and_embed_faces(image_path: str) -> List[Tuple[np.ndarray, float]]:
         return []
 
     if not faces:
-        logger.debug("No faces returned by extract_faces for %s", image_path)
+        logger.info("No faces returned by extract_faces for %s", image_path)
         return []
 
     # ── Step 2: Filter by confidence ──────────────────────────────────────────
@@ -269,12 +298,12 @@ def process_image_for_clustering(
         logger.debug("No face detected in %s", image_path)
         return []
 
-    faiss_idx = get_faiss_index(user_id,db)
+    faiss_idx = get_faiss_index(user_id, db)
     face_results = []
 
     for embedding, confidence in face_embeddings:
 
-        # 🔥 STEP 1: FAISS SEARCH
+        # 🔥 STEP 1: FAISS SEARCH (against ALL individual embeddings now!)
         matched_id, score = faiss_idx.search(embedding, threshold)
 
         is_new = matched_id is None
@@ -287,27 +316,28 @@ def process_image_for_clustering(
                 user_id=user_id,
                 album_id=album_id,
             )
-
             db.add(new_person)
             db.commit()
             db.refresh(new_person)
-
             person_id = str(new_person.person_id)
 
         else:
             person_id = matched_id
 
+            # Update centroid in DB for reference (proper running average)
             person = db.query(Person).filter(Person.person_id == matched_id).first()
             if person:
                 old = np.array(person.centroid)
-                updated = (old + embedding) / 2
+                emb_count = faiss_idx.get_embedding_count(person_id)
+                # ✅ CORRECT running average: old_mean * n + new / (n+1)
+                updated = (old * emb_count + embedding) / (emb_count + 1)
                 person.centroid = updated.tolist()
                 db.commit()
 
-        # 🔥 STEP 3: FAISS UPDATE
-        faiss_idx.add_or_update(person_id, embedding)
+        # 🔥 STEP 3: Add INDIVIDUAL embedding to FAISS (not centroid!)
+        faiss_idx.add_embedding(person_id, embedding)
 
-        logger.debug(
+        logger.info(
             "Image %s → person_id=%s score=%.4f new=%s confidence=%.3f",
             Path(image_path).name,
             person_id,
@@ -315,7 +345,6 @@ def process_image_for_clustering(
             is_new,
             confidence,
         )
-
         face_results.append((person_id, embedding, is_new))
 
     return face_results
@@ -327,13 +356,14 @@ def process_image_for_clustering(
 def process_image_for_clustering_single(
     image_path: str,
     user_id: str,
+    album_id: str,
     threshold: float,
+    db: Session,
 ) -> Tuple[Optional[str], Optional[np.ndarray], bool]:
-    """
-    Single-face convenience wrapper around process_image_for_clustering.
-    Returns the first face found, or (None, None, False) if none.
-    """
-    results = process_image_for_clustering(image_path, user_id, threshold)
+    """Single-face convenience wrapper."""
+    results = process_image_for_clustering(
+        image_path, user_id, album_id, threshold, db
+    )
     if not results:
         return None, None, False
     return results[0]
