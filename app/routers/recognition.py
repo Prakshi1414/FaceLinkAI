@@ -55,54 +55,48 @@ async def recognize_face(
 
     # ── 2. FAISS search (per-user index) ──────────────────────────────────────
 
+  # ── 2. FAISS search (per-user index) ──────────────────────────────────────
+
+    # FIX: Always use the album_id from the request instead of guessing with .first()
+    album = db.query(Album).filter(Album.id == album_id).first()
+    
+    if not album:
+        return {
+            "status": False,
+            "message": "Album not found",
+            "data": None
+        }
+
+    # Verify the current user has permission to access this specific album
+    has_access = False
     if current_user.role == "studio":
-
-        album = (
-            db.query(Album)
-            .filter(Album.user_id == current_user.id)
-            .first()
-        )
-
+        if album.user_id == current_user.id:
+            has_access = True
     else:
-
-        # ── CLIENT ACCESS ─────────────────────────────────────────
-
-        album = (
-            db.query(Album)
-            .filter(Album.owner_id == current_user.id)
-            .first()
-        )
-
-        # ── RELATIVE ACCESS ──────────────────────────────────────
-
-        if not album:
-
+        # Client or Relative access check
+        if album.owner_id == current_user.id:
+            has_access = True
+        
+        if not has_access:
             invite = (
                 db.query(AlbumInvite)
                 .filter(
+                    AlbumInvite.album_id == album_id,
                     AlbumInvite.requested_user_id == current_user.id,
                     AlbumInvite.status == "approved",
                     AlbumInvite.is_active == True
                 )
                 .first()
             )
-
             if invite:
+                has_access = True
 
-                album = (
-                    db.query(Album)
-                    .filter(Album.id == invite.album_id)
-                    .first()
-                )
-
-        if not album:
-            return {
-                "status": False,
-                "message": "No accessible album found",
-                "data": None
-            }
-
-
+    if not has_access:
+        return {
+            "status": False,
+            "message": "You do not have access to this album",
+            "data": None
+        }
     # IMPORTANT:
     # Always use studio owner's FAISS index
 
