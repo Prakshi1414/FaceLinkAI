@@ -55,7 +55,7 @@ async def recognize_face(
 
     # ── 2. FAISS search (per-user index) ──────────────────────────────────────
 
-  # ── 2. FAISS search (per-user index) ──────────────────────────────────────
+
 
     # FIX: Always use the album_id from the request instead of guessing with .first()
     album = db.query(Album).filter(Album.id == album_id).first()
