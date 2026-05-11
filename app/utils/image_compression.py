@@ -2,7 +2,7 @@ import os
 from PIL import Image
 import io
 
-def compress_image(input_path: str, output_path: str, quality: int = 70, max_width: int = 1920) -> None:
+def compress_image(input_path: str, output_path: str, quality: int = 70) -> None:
     try:
         # Open the image from the temp folder
         with Image.open(input_path) as img:
@@ -11,9 +11,6 @@ def compress_image(input_path: str, output_path: str, quality: int = 70, max_wid
             
             # Resize if the width is greater than max_width
             width, height = img.size
-            if width > max_width:
-                new_height = int((max_width / width) * height)
-                img = img.resize((max_width, new_height), Image.Resampling.LANCZOS)
             
             # Save the compressed image to the target folder
             img.save(output_path, "JPEG", quality=quality, optimize=True)
