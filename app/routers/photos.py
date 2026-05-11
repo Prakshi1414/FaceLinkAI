@@ -23,7 +23,7 @@ router = APIRouter(tags=["Photos"])
 logger = logging.getLogger(__name__)
 
 _ALLOWED_EXTENSIONS: frozenset[str] = frozenset(
-    {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tiff", ".tif"}
+    {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tiff", ".tif",".nef"}
 )
 
 
