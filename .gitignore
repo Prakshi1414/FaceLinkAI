@@ -11,6 +11,5 @@ data/
 
 # Node / Frontend
 node_modules/
-dist/
 build/
 .vite-source-tags.js
