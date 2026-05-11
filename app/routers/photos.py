@@ -100,7 +100,6 @@ class TempFileHandler:
             input_path=str(self._temp_path),
             output_path=str(final_path),
             quality=quality,
-            max_width=max_width
         )
         
         # Get the size of the newly compressed file
