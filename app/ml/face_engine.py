@@ -81,39 +81,25 @@ class FAISSPersonIndex:
                 self._index.add(normed)
                 self._person_ids.append(pid)
 
-    def search(
-        self,
-        embedding: np.ndarray,
-        threshold: float,
-    ) -> Tuple[Optional[str], float]:
+    def search(self, embedding: np.ndarray, threshold: float):
         normed = self._l2_norm(embedding).reshape(1, -1).astype("float32")
+
         with self._lock:
             if self._index.ntotal == 0:
-                return None, 0.0
-            scores, indices = self._index.search(normed, k=10)
-        score = float(scores[0][0])
-        idx = int(indices[0][0])
-        
-        # ✅ NEW: Log the match score here!
-        logger.info(
-            "FAISS Search → Top score: %.4f (Threshold: %.2f) → Matched: %s",
-            score, threshold, score >= threshold
-        )
+                return []
 
-        if score >= threshold and 0 <= idx < len(self._person_ids):
-            candidates = []
+            scores, indices = self._index.search(normed, k=30)
 
-            for score, idx in zip(scores[0], indices[0]):
-                if idx == -1:
-                    continue
+        results = []
 
-                if score >= threshold:
-                    candidates.append(
-                        (self._person_ids[idx], float(score))
-                    )
+        for score, idx in zip(scores[0], indices[0]):
+            if idx == -1:
+                continue
 
-            return candidates
-        return None, score
+            if score >= threshold:
+                results.append((self._person_ids[idx], float(score)))
+
+        return results
 
     def add_embedding(self, person_id: str, embedding: np.ndarray) -> None:
         """Add a single face embedding for a person — no averaging!"""
@@ -315,7 +301,14 @@ def process_image_for_clustering(
     for embedding, confidence in face_embeddings:
 
         # 🔥 STEP 1: FAISS SEARCH (against ALL individual embeddings now!)
-        matched_id, score = faiss_idx.search(embedding, threshold)
+        candidates = faiss_idx.search(embedding, threshold)
+
+        if candidates:
+            candidates = sorted(candidates, key=lambda x: x[1], reverse=True)
+            matched_id, score = candidates[0]
+        else:
+            matched_id = None
+            score = 0.0
 
         is_new = matched_id is None
 

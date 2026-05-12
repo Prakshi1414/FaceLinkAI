@@ -188,7 +188,8 @@ def get_album_photos(
     photos = (
         db.query(Photo)
         .filter(Photo.album_id == album.id)
-        .order_by(Photo.uploaded_at.desc())
+        .order_by(Photo.img_path, Photo.uploaded_at.desc())
+        .distinct(Photo.img_path)
         .all()
     )
 
@@ -262,8 +263,12 @@ def get_my_albums(
                 "album_name": album.album_name,
                 "album_code": album.album_code,
                 "event_date": album.event_date,
-                "total_photos": album.total_photos,
-                "total_size": album.total_size,
+                "total_photos": (
+                    db.query(Photo.img_path)
+                    .filter(Photo.album_id == album.id)
+                    .distinct()
+                    .count()
+                ),
                 "share_link": album.share_link,
                 "is_active": album.is_active,
                 "created_at": album.created_at,
@@ -297,7 +302,12 @@ def get_albums(
             "album_name": a.album_name,
             "album_code": a.album_code,
             "event_date": a.event_date,
-            "total_photos": a.total_photos,
+            "total_photos": (
+                db.query(Photo.img_path)
+                .filter(Photo.album_id == a.id)
+                .distinct()
+                .count()
+            ),
             "total_size": a.total_size,
             "share_link": a.share_link,
             "is_active": a.is_active,
@@ -445,6 +455,7 @@ def get_album(
         db.query(Photo)
         .filter(Photo.album_id == album.id)
         .order_by(Photo.uploaded_at)
+        .group_by(Photo.img_path)
         .all()
     )
 
