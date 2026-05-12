@@ -116,37 +116,50 @@ async def recognize_face(
             }
         }
     
-    person_id, similarity_score = user_index.search(
+    candidates = user_index.search(
         embedding,
         threshold=settings.FACE_SIMILARITY_THRESHOLD,
     )
 
-    is_new_person  = person_id is None
     matched_photos: List[RecognizedPhoto] = []
 
-    # ── 3. DB lookup – only within this studio's albums ───────────────────────
-    if person_id is not None:
+    person_id = None
+    similarity_score = None
+
+    # ── 3. Find best candidate inside this album ──────────────────────────────
+
+    for candidate_person_id, candidate_score in candidates:
+
         rows = (
             db.query(Photo, Album.album_name)
             .join(Album, Album.id == Photo.album_id)
             .filter(
-                Photo.person_id == person_id,
+                Photo.person_id == candidate_person_id,
                 Photo.album_id == album_id,
             )
             .order_by(Photo.uploaded_at.desc())
             .all()
         )
 
-        matched_photos = [
-            RecognizedPhoto(
-                photo_id   = photo.id,
-                img_path   = photo.img_path,
-                album_id   = photo.album_id,
-                album_name = album_name,
-                similarity = round(similarity_score, 4),
-            )
-            for photo, album_name in rows
-        ]
+        if rows:
+
+            person_id = candidate_person_id
+            similarity_score = candidate_score
+
+            matched_photos = [
+                RecognizedPhoto(
+                    photo_id   = photo.id,
+                    img_path   = photo.img_path,
+                    album_id   = photo.album_id,
+                    album_name = album_name,
+                    similarity = round(candidate_score, 4),
+                )
+                for photo, album_name in rows
+            ]
+
+            break
+
+    is_new_person = person_id is None
     return {
         "status": True,
         "message": "Face recognition completed",

@@ -90,7 +90,7 @@ class FAISSPersonIndex:
         with self._lock:
             if self._index.ntotal == 0:
                 return None, 0.0
-            scores, indices = self._index.search(normed, k=1)
+            scores, indices = self._index.search(normed, k=10)
         score = float(scores[0][0])
         idx = int(indices[0][0])
         
@@ -101,7 +101,18 @@ class FAISSPersonIndex:
         )
 
         if score >= threshold and 0 <= idx < len(self._person_ids):
-            return self._person_ids[idx], score
+            candidates = []
+
+            for score, idx in zip(scores[0], indices[0]):
+                if idx == -1:
+                    continue
+
+                if score >= threshold:
+                    candidates.append(
+                        (self._person_ids[idx], float(score))
+                    )
+
+            return candidates
         return None, score
 
     def add_embedding(self, person_id: str, embedding: np.ndarray) -> None:
