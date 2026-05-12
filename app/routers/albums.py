@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import uuid as _uuid
+from sqlalchemy import func
 from app.utils.code_generator import generate_unique_album_code
 from app.utils.auth import get_current_user , hash_password
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -308,7 +309,12 @@ def get_albums(
                 .distinct()
                 .count()
             ),
-            "total_size": a.total_size,
+            "total_size": (
+                db.query(func.coalesce(func.sum(Photo.file_size), 0))
+                .filter(Photo.album_id == a.id)
+                
+                .scalar()
+            ),
             "share_link": a.share_link,
             "is_active": a.is_active,
             "created_at": a.created_at,
