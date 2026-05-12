@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "./data/images"
 
     # ── AI ────────────────────────────────────────────────────────────────────
-    FACE_SIMILARITY_THRESHOLD: float = 0.50
+    FACE_SIMILARITY_THRESHOLD: float = 0.72
     FAISS_NPROBE: int = 10
   
     # NEW (optional but useful)
